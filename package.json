@@ -1,0 +1,25 @@
+{
+  "name": "dota2-ruin-detector",
+  "version": "1.0.0",
+  "description": "Веб-сервис для автоматического поиска руинеров в матчах Dota 2 на базе OpenDota API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node server.js --selftest"
+  },
+  "keywords": [
+    "dota2",
+    "opendota",
+    "overwatch",
+    "griefing-detection",
+    "analytics"
+  ],
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
