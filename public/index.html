@@ -173,25 +173,25 @@
   <!-- Пункт 2: Новое лого (.png) и шапка с названием в две контрастные части -->
   <header class="border-b border-white/[0.08] bg-[#07090e]/90 backdrop-blur-md sticky top-0 z-30">
     <div class="max-w-[1840px] mx-auto px-4 sm:px-6 xl:px-10 py-3.5 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center gap-3.5">
+      <div onclick="showLandingScreen()" title="На начальный экран" class="flex items-center gap-3.5 cursor-pointer group">
         <div class="relative flex items-center justify-center shrink-0">
           <img
             src="data:image/png;base64,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"
             alt="Dota 2 Logo"
-            class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-[0_0_12px_rgba(239,68,68,0.55)] transition-transform hover:scale-105"
+            class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-[0_0_12px_rgba(239,68,68,0.55)] transition-transform group-hover:scale-105"
           />
         </div>
         <div>
           <div class="flex flex-wrap items-center gap-2.5">
             <h1 class="font-brand text-base sm:text-xl font-extrabold tracking-wider uppercase flex items-center gap-2">
-              <span class="text-white drop-shadow-sm">DOTA 2</span>
+              <span class="text-white drop-shadow-sm group-hover:text-rose-100 transition">DOTA 2</span>
               <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-rose-500 to-amber-400">RUIN DETECTOR</span>
             </h1>
             <span class="text-[10px] uppercase tracking-widest font-mono font-bold px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
-              ESPORTS HUD v5.4
+              AI HUD v5.7
             </span>
           </div>
-          <p class="text-xs text-slate-400 hidden sm:block">Поминутная криминалистика матчей, аудит сборок по мете и детектор скрытого руина</p>
+          <p class="text-xs text-slate-400 hidden sm:block">Поминутная криминалистика матчей, Мини-ИИ оценщик билдов и детектор скрытого руина</p>
         </div>
       </div>
 
@@ -202,7 +202,7 @@
             <input
               id="matchInput"
               type="text"
-              value="9041259372"
+              value=""
               placeholder="Match ID или ссылка (напр. 9014019510)..."
               class="w-full bg-[#121824] border border-white/[0.1] focus:border-rose-500/80 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 outline-none font-mono transition"
             />
@@ -216,6 +216,14 @@
           </button>
         </form>
 
+        <button
+          id="backToHomeBtn"
+          onclick="showLandingScreen()"
+          title="Вернуться на начальное окно поиска"
+          class="hidden font-display uppercase tracking-wider px-3 py-2 rounded-lg bg-[#121824] hover:bg-[#1b2333] text-slate-300 border border-white/[0.08] transition text-xs font-bold shrink-0"
+        >
+          ← Главная
+        </button>
         <button
           onclick="toggleHelpModal()"
           title="Как работает алгоритм"
@@ -234,6 +242,132 @@
   </header>
 
   <main class="flex-1 max-w-[1840px] w-full mx-auto px-4 sm:px-6 xl:px-10 py-5 space-y-5">
+
+    <!-- ======================================================================= -->
+    <!-- НАЧАЛЬНОЕ ОКНО (СТАРТОВЫЙ ЭКРАН ПРИ ОТКРЫТИИ САЙТА)                     -->
+    <!-- ======================================================================= -->
+    <section id="landingHeroSection" class="py-4 sm:py-8 space-y-6">
+      <div class="relative overflow-hidden rounded-3xl pro-card border border-white/[0.1] p-6 sm:p-10 xl:p-12 shadow-2xl">
+        <!-- Атмосферное киберспортивное свечение на фоне -->
+        <div class="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-emerald-500/10 blur-3xl"></div>
+        <div class="pointer-events-none absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-rose-600/15 blur-3xl"></div>
+
+        <div class="relative z-10 max-w-4xl mx-auto text-center space-y-6">
+          <div class="inline-flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-full bg-[#121824]/90 border border-rose-500/30 text-[11px] font-mono text-rose-300 shadow-inner">
+            <span>⚡ OFFICIAL DOTA 2 TELEMETRY</span>
+            <span class="text-slate-600">•</span>
+            <span class="text-emerald-400">STRATZ GRAPHQL + OPENDOTA LIVE META</span>
+            <span class="text-slate-600">•</span>
+            <span class="text-amber-300">10-ВЕКТОРНЫЙ МИНИ-ИИ БИЛДОВ</span>
+          </div>
+
+          <div class="flex flex-col items-center justify-center gap-3">
+            <img
+              src="data:image/png;base64,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"
+              alt="Dota 2"
+              class="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-[0_0_24px_rgba(239,68,68,0.65)]"
+            />
+            <h2 class="font-brand text-2xl sm:text-4xl lg:text-5xl font-extrabold uppercase tracking-tight text-white leading-tight">
+              УЗНАЙ, КТО НА САМОМ ДЕЛЕ <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-rose-500 to-amber-400">СЛИЛ ТВОЮ КАТКУ</span>
+            </h2>
+            <p class="text-xs sm:text-base text-slate-300 max-w-2xl leading-relaxed">
+              Вставьте <span class="font-mono text-white font-semibold">Match ID</span> или ссылку на матч из Dotabuff, STRATZ или OpenDota. Система проведет поминутный аудит всех 10 игроков, оценит контр-закуп против всего вражеского пика и вычислит Главного Якоря по шкале от <span class="font-mono text-rose-400 font-bold">0 до 100</span>.
+            </p>
+          </div>
+
+          <!-- Центральная форма поиска матча -->
+          <form onsubmit="handleHeroSearch(event)" class="max-w-2xl mx-auto pt-2">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 p-2 rounded-2xl bg-[#07090e]/95 border border-white/[0.12] focus-within:border-rose-500/80 shadow-2xl transition">
+              <div class="flex items-center gap-3 flex-1 px-3 py-2">
+                <span class="text-slate-400 text-lg select-none">🔍</span>
+                <input
+                  id="heroMatchInput"
+                  type="text"
+                  value=""
+                  placeholder="Введите ID матча (например, 9014019510) или ссылку..."
+                  class="w-full bg-transparent text-sm sm:text-base text-white placeholder-slate-500 outline-none font-mono"
+                />
+              </div>
+              <button
+                type="submit"
+                id="heroAnalyzeBtn"
+                class="font-display uppercase tracking-wider px-6 py-3.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs sm:text-sm transition shadow-lg shadow-rose-950/60 shrink-0"
+              >
+                Проанализировать матч →
+              </button>
+            </div>
+          </form>
+
+          <!-- Быстрые действия: Демо-матч в 1 клик и недавние проверки -->
+          <div class="flex flex-wrap items-center justify-center gap-2.5 pt-1 text-xs">
+            <span class="text-slate-400">Нет ID под рукой?</span>
+            <button
+              type="button"
+              onclick="quickLoadMatch('9041259372')"
+              class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/35 font-mono font-semibold transition"
+            >
+              <span>🎮 Запустить демо-разбор (#9041259372)</span>
+            </button>
+            <button
+              type="button"
+              onclick="toggleHelpModal()"
+              class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#121824] hover:bg-[#1b2333] text-slate-300 border border-white/[0.08] font-display uppercase tracking-wider font-bold transition"
+            >
+              <span>📖 Как считает алгоритм</span>
+            </button>
+          </div>
+
+          <div id="heroRecentMatchesBox" class="pt-2 flex flex-wrap items-center justify-center gap-2 text-xs"></div>
+        </div>
+      </div>
+
+      <!-- Сетка ключевых возможностей под главным окном -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="p-5 rounded-2xl pro-card border-t-2 border-t-rose-500/70 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">AI BUILD MATRIX</span>
+            <span class="text-lg">🤖</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">Мини-ИИ Оценщик Билдов</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Проверяет все 60 слотов против пика врага: ловит отсутствие <span class="font-mono text-slate-200">Nullifier</span> против <span class="font-mono text-slate-200">Eul's/Ghost</span>, игнор <span class="font-mono text-slate-200">MKB</span> против <span class="font-mono text-slate-200">Butterfly</span>, отсутствие <span class="font-mono text-slate-200">Silver Edge</span> в пассивки и <span class="font-mono text-slate-200">Skadi/Shiva/Vessel</span> в хил.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl pro-card border-t-2 border-t-emerald-500/70 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">LIVE TELEMETRY</span>
+            <span class="text-lg">📈</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">График переломов и Хронология</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Интерактивный график золота с поминутным прицелом (Crosshair). Автоматически находит переломный замес, драки без ультимейтов (в КД) и бессмысленные отдачи <span class="font-mono text-slate-200">0 в 4</span>.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl pro-card border-t-2 border-t-sky-500/70 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">HEAD-TO-HEAD</span>
+            <span class="text-lg">⚔️</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">Дуэль 1 на 1 (Tug-of-War)</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Прямое сравнение любых двух игроков матча по 8 параметрам на двухцветной симметричной шкале от центра с общим табло счета дуэли.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl pro-card border-t-2 border-t-amber-500/70 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">FORENSIC SCORE</span>
+            <span class="text-lg">⚖️</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">Двухконтурный Индекс 0–100</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Отличает явный саботаж (разбитые шмотки, намеренный фид, амулет) от скрытого балласта («Главного Якоря») и защищает саппортов амнистией за вижен и сейв.
+          </p>
+        </div>
+      </div>
+    </section>
 
     <section id="verdictSection" class="hidden space-y-5">
       <!-- 1. ВЕРХНИЙ РЯД: ГЛАВНЫЙ ВЕРДИКТ С АТМОСФЕРНЫМ ФОНОМ ГЕРОЯ И RADIAL GAUGE (8 кол) + СВОДКА МАТЧА (4 кол) -->
@@ -505,6 +639,49 @@
       </div>
     </section>
   </main>
+
+  <!-- Официальный подвал (Footer) с копирайтом и атрибуцией Valve Corporation -->
+  <footer class="mt-10 border-t border-white/[0.08] bg-[#05070b]/95 text-slate-400">
+    <div class="max-w-[1840px] mx-auto px-4 sm:px-6 xl:px-10 py-7 space-y-5">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-5 border-b border-white/[0.06]">
+        <div class="flex items-center gap-3">
+          <img
+            src="data:image/png;base64,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"
+            alt="Dota 2"
+            class="w-8 h-8 object-contain opacity-90"
+          />
+          <div>
+            <div class="font-brand text-xs sm:text-sm font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
+              <span>VALVE</span>
+              <span class="text-slate-600">•</span>
+              <span>DOTA 2 OFFICIAL TELEMETRY &amp; RUIN DETECTOR</span>
+            </div>
+            <div class="text-[11px] text-slate-500 font-mono">
+              Powered by Steam Web API • OpenDota API • STRATZ GraphQL Engine
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+          <span class="px-2.5 py-1 rounded-md bg-[#0c1018] border border-white/[0.07] text-emerald-400">● Steam API: Online</span>
+          <span class="px-2.5 py-1 rounded-md bg-[#0c1018] border border-white/[0.07] text-sky-400">● STRATZ Meta: Synced</span>
+          <span class="px-2.5 py-1 rounded-md bg-[#0c1018] border border-white/[0.07] text-slate-300">Patch 7.41+</span>
+        </div>
+      </div>
+
+      <div class="space-y-2 text-[11px] text-slate-500 leading-relaxed">
+        <p class="text-slate-400 font-medium">
+          © 2026 Valve Corporation. Все права защищены. Dota, логотип Dota 2, Steam и логотип Steam являются товарными знаками и/или зарегистрированными товарными знаками корпорации Valve (Valve Corporation) в США и других странах.
+        </p>
+        <p>
+          Все внутриигровые изображения героев, иконки предметов, названия способностей и данные матчей являются исключительной собственностью <strong class="text-slate-400">Valve Corporation</strong>. Аналитическая платформа работает на базе официальной телеметрии Steam Web API, OpenDota и STRATZ GraphQL.
+        </p>
+        <p class="font-mono text-[10px] text-slate-600 pt-1">
+          © 2026 Valve Corporation, all rights reserved. Valve, the Valve logo, Steam, the Steam logo, Dota and the Dota logo are trademarks and/or registered trademarks of Valve Corporation in the U.S. and/or other countries.
+        </p>
+      </div>
+    </div>
+  </footer>
 
   <!-- Модальное окно справки -->
   <div id="helpModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target === this) toggleHelpModal()">
@@ -5865,36 +6042,65 @@ function saveRecentMatch(data) {
 
 function renderRecentMatches() {
   const container = document.getElementById('recentMatchesRow');
-  if (!container) return;
+  const heroBox = document.getElementById('heroRecentMatchesBox');
   try {
     const raw = localStorage.getItem('d2_recent_matches_v5');
     const list = raw ? JSON.parse(raw) : [];
     if (list.length === 0) {
-      container.innerHTML = `<span class="text-slate-500">Быстрый старт: введите ID любого матча Dota 2</span>`;
+      if (container) container.innerHTML = `<span class="text-slate-500">Быстрый старт: введите ID любого матча Dota 2 или откройте демо-матч</span>`;
+      if (heroBox) heroBox.innerHTML = '';
       return;
     }
-    container.innerHTML = `
-      <span class="text-slate-500 mr-1">Недавние матчи:</span>
-      ${list.map(m => `
-        <button
-          onclick="quickLoadMatch('${m.id}')"
-          class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#121824] hover:bg-[#1b2333] border border-white/[0.07] text-[11px] text-slate-300 transition"
-        >
-          <span class="font-mono text-white">#${m.id}</span>
-          <span class="hero-name-chip">${m.hero}</span>
-          <span class="font-mono font-bold ${m.score >= 50 ? 'text-rose-400' : m.score >= 25 ? 'text-amber-400' : 'text-emerald-400'}">${m.score}</span>
-        </button>
-      `).join('')}
-    `;
+    const buttonsHtml = list.map(m => `
+      <button
+        type="button"
+        onclick="quickLoadMatch('${m.id}')"
+        class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#121824] hover:bg-[#1b2333] border border-white/[0.07] text-[11px] text-slate-300 transition"
+      >
+        <span class="font-mono text-white">#${m.id}</span>
+        <span class="hero-name-chip">${m.hero}</span>
+        <span class="font-mono font-bold ${m.score >= 50 ? 'text-rose-400' : m.score >= 25 ? 'text-amber-400' : 'text-emerald-400'}">${m.score}</span>
+      </button>
+    `).join('');
+
+    if (container) {
+      container.innerHTML = `<span class="text-slate-500 mr-1">Недавние матчи:</span>${buttonsHtml}`;
+    }
+    if (heroBox) {
+      heroBox.innerHTML = `<span class="text-slate-500 mr-1">Недавно проверенные:</span>${buttonsHtml}`;
+    }
   } catch (_) {}
+}
+
+function showLandingScreen() {
+  const landing = document.getElementById('landingHeroSection');
+  const verdict = document.getElementById('verdictSection');
+  const backBtn = document.getElementById('backToHomeBtn');
+  const errorBox = document.getElementById('errorBox');
+  if (landing) landing.classList.remove('hidden');
+  if (verdict) verdict.classList.add('hidden');
+  if (backBtn) backBtn.classList.add('hidden');
+  if (errorBox) errorBox.classList.add('hidden');
+  const heroInput = document.getElementById('heroMatchInput');
+  if (heroInput) heroInput.focus();
 }
 
 function quickLoadMatch(id) {
   const input = document.getElementById('matchInput');
-  if (input) {
-    input.value = id;
-    handleSearch();
+  const heroInput = document.getElementById('heroMatchInput');
+  if (input) input.value = id;
+  if (heroInput) heroInput.value = id;
+  handleSearch();
+}
+
+function handleHeroSearch(e) {
+  if (e) e.preventDefault();
+  const heroInput = document.getElementById('heroMatchInput');
+  const headerInput = document.getElementById('matchInput');
+  if (heroInput && headerInput) {
+    headerInput.value = heroInput.value;
   }
+  handleSearch();
 }
 
 async function fetchAnalysis(matchId) {
@@ -5948,15 +6154,27 @@ async function fetchAnalysis(matchId) {
 async function handleSearch(e) {
   if (e) e.preventDefault();
   const input = document.getElementById('matchInput');
+  const heroInput = document.getElementById('heroMatchInput');
+  const queryVal = (input && input.value.trim()) || (heroInput && heroInput.value.trim()) || '';
+  if (input) input.value = queryVal;
+  if (heroInput) heroInput.value = queryVal;
+
   const errorBox = document.getElementById('errorBox');
   const btn = document.getElementById('analyzeBtn');
+  const heroBtn = document.getElementById('heroAnalyzeBtn');
 
   errorBox.classList.add('hidden');
-  btn.disabled = true;
-  btn.innerHTML = '<span>⏳ Анализ...</span>';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Анализ...</span>';
+  }
+  if (heroBtn) {
+    heroBtn.disabled = true;
+    heroBtn.innerHTML = '<span>⏳ Загрузка и ИИ-аудит матча...</span>';
+  }
 
   try {
-    const result = await fetchAnalysis(input.value);
+    const result = await fetchAnalysis(queryVal);
     currentAnalysis = result;
     selectedSlot = result.verdict.culprit.player_slot;
     saveRecentMatch(result);
@@ -5965,8 +6183,14 @@ async function handleSearch(e) {
     errorBox.textContent = err.message || 'Не удалось загрузить матч. Проверьте номер матча.';
     errorBox.classList.remove('hidden');
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span>Проверить</span>';
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Проверить</span>';
+    }
+    if (heroBtn) {
+      heroBtn.disabled = false;
+      heroBtn.innerHTML = '<span>Проанализировать матч →</span>';
+    }
   }
 }
 
@@ -6221,6 +6445,10 @@ function renderWidescreenSidebars(data) {
 }
 
 function renderDashboard(data) {
+  const landingEl = document.getElementById('landingHeroSection');
+  if (landingEl) landingEl.classList.add('hidden');
+  const backBtn = document.getElementById('backToHomeBtn');
+  if (backBtn) backBtn.classList.remove('hidden');
   document.getElementById('verdictSection').classList.remove('hidden');
   const vc = document.getElementById('verdictCard');
   const c = data.verdict.culprit;
@@ -7335,7 +7563,13 @@ function renderScoreboard(data) {
 
 window.addEventListener('DOMContentLoaded', () => {
   renderRecentMatches();
-  handleSearch();
+  const params = new URLSearchParams(window.location.search);
+  const urlMatchId = params.get('match') || params.get('id');
+  if (urlMatchId) {
+    quickLoadMatch(urlMatchId);
+  } else {
+    showLandingScreen();
+  }
 });
   </script>
 </body>
