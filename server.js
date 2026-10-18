@@ -1,10 +1,5 @@
 /**
  * server.js — Node.js Бэкенд для поиска руинеров в Dota 2 (OpenDota API + STRATZ GraphQL API, v5.6)
- * 1) Автоматически подгружает константы героев (/api/constants/heroes) и всех предметов (/api/constants/items)
- *    из OpenDota API.
- * 2) Обогащает матчи через STRATZ GraphQL API (с переданным токеном пользователя): даже если матч не распарсен
- *    в OpenDota, подтягивает роли (POSITION_1..POSITION_5), график золота (radiantNetworthLeads) и тайминги
- *    покупок предметов (stats.itemPurchases), а при недоступности OpenDota полностью анализирует матч напрямую из STRATZ!
  */
 
 const http = require('http');
@@ -22,8 +17,21 @@ const {
 } = require('./analyzer');
 
 const PORT = process.env.PORT || 3000;
-const OPENDOTA_BASE = 'https://api.opendota.com/api';
+const OPENDOTA_BASE = 'https://opendota.com';
 const STRATZ_TOKEN = process.env.STRATZ_API_TOKEN || DEFAULT_STRATZ_API_TOKEN;
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+};
 
 let dynamicConstantsLoaded = false;
 
@@ -71,7 +79,7 @@ async function fetchAndAnalyzeMatch(matchId) {
   const rawInput = String(matchId || "").trim();
   const digitMatch = rawInput.match(/\d{5,15}/);
   const cleanId = digitMatch ? digitMatch[0] : rawInput;
-  if (!/^\d{5,15}$/.test(cleanId)) {
+  if (!/^\d{5,15}\$/.test(cleanId)) {
     const err = new Error('Некорректный формат Match ID. Введите числовой идентификатор матча.');
     err.statusCode = 400;
     throw err;
@@ -99,7 +107,6 @@ async function fetchAndAnalyzeMatch(matchId) {
     }
   } catch (_) {}
 
-  // Обогащаем матч через STRATZ GraphQL API (или загружаем целиком из STRATZ, если OpenDota не ответил)
   try {
     const enriched = await fetchStratzMatchAndEnrich(cleanId, matchData, {
       stratzToken: STRATZ_TOKEN,
@@ -143,12 +150,6 @@ if (process.argv.includes('--selftest')) {
 }
 
 function startServer() {
-  const htmlPathCandidates = [
-    path.join(__dirname, 'index.html'),
-    path.join(__dirname, 'public', 'index.html'),
-    path.join(__dirname, 'dota2_ruin_detector.html')
-  ];
-
   const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -162,9 +163,10 @@ function startServer() {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = parsedUrl.pathname;
 
-    const matchRoute = pathname.match(/^\/api\/analyze\/([^/]+)$/);
+    // 1. Обработка API-запроса на анализ матча
+    const matchRoute = pathname.match(/^\/api\/analyze\/([^/]+)\$/);
     if (req.method === 'GET' && matchRoute) {
-      const matchId = matchRoute[1];
+      const matchId = matchRoute;
       try {
         const analysis = await fetchAndAnalyzeMatch(matchId);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -176,16 +178,24 @@ function startServer() {
       }
     }
 
-    if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html' || pathname === '/public/index.html')) {
-      const existingHtmls = htmlPathCandidates.filter(p => fs.existsSync(p));
-      existingHtmls.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-      const foundHtml = existingHtmls[0];
-      if (foundHtml) {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(fs.readFileSync(foundHtml, 'utf-8'));
+    // 2. Раздача всех статических файлов (index.html, app.js, стили и др.)
+    if (req.method === 'GET') {
+      let relativePath = (pathname === '/' || pathname === '/public/index.html') 
+        ? 'index.html' 
+        : pathname.replace(/^\/+/, '');
+      
+      const filePath = path.join(__dirname, relativePath);
+
+      // Защита от выхода за пределы папки и проверка существования файла
+      if (filePath.startsWith(__dirname) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': contentType });
+        return res.end(fs.readFileSync(filePath));
       }
     }
 
+    // 3. Ответ 404, если файл или маршрут не найден
     res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ error: 'Маршрут не найден' }));
   });
