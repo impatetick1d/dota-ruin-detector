@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DOTA 2 RUIN DETECTOR — Esports Match &amp; Build Forensics</title>
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAIsUlEQVR4nO1Ze4xU1Rn/7vnOuXfu3Dt35s5rl132MQv7AFyW5bWwUBR2eRgpTUxt/0AjwbaW1gfaAJGC0BdRoUDB0FCrFBUoTbW2kZZWG9HWNjZo29gXWsQCRRDDssxj2S3sab7ZGToMM3PvIsY02S/5spPsOd/jfOd8j98FGKIhGqKPgqZyBl8Na3yXrfHnPKhsBIBP5i4QDBYHBPtJUOUv2iq+FlHxgMFxJwAsAgDzwxrQqSjKQzoqGyyBm4nDqng0ovFdEY3v8av4FGewIm+PygAWWQKPVOni3JdqA32bxkTk9rFRuaYhJJmi9APA7QDgYQxurdJFYltzVO4YV3aJHx4Vlp1hI+7l7JQl8ISiKFLnrNuv8r0A0ODW+Gl+gYnVDcG04lz+RlNIklHEFR6R0lB5CACW+FW+28tZvM3W489OqpBd80ZcwU+1lsuJAU+3B1mPrWLy1WlVBdcR7xlfLg+0D0///ssNNXJ1ffCCwVk3ANS5ceCBu2P2hWLCs3xwRrX8Qk3g/G1VVmLjmIj88/U1Jddn+cTsOnlyTp2rtV05fEe1vw8AlrlxYO2KkfagFXyU/M9ZtdJWMQEA0/8vHXispUwGVb7fjfFFHXi3Iyb3ThgmX87czWvBb82qTRv3wpTKkut+NaVS2gIPXZUD/54dk4uqrB4dWSqs4e98HE/eGDUShztqr9rwf3XG5NI6u9fLWTIg+H5L4NEmU4tnH24+vzenTmrIegFAH7QD+yZXSMFYDwBUZv6vmgK3hFSefH5yxaBP/M6awHkvZz1+FX+YI1NhAAsNjvFftBWOxihTO3vVb2BBmdljcPYcKcpZN9fLWeKnRdJmPv9+epW0BKYMjo8DQHUR3Z+fV2bEC+3/bKUvCQCfuyoHKPVdZ2lJn8BteU7MNDg7M7/cTLwxo7qkA4dm1cp2W49bHP8GAC2FFDMGyxZX+XsK7b+vzr5AKf6qHCA+2hmTLZYWNznuIF056w2VsZUGZ8n1o8MXzzhEYltztN8nMOlF3EBVOVexreIbP5owrOC+rzeGpAeVzW4cWHX/CPtiISHHZ8eomsZ9HKm0Y96+Rovjm+22nvjrDTWOb2F+1EyYnB0HgOsz+70qsj56sIX2rKwP9isAX3PjwE1jLe1sMeXvza6T04J6wsfZs3mRIOIexh40OSbppJ3exZ7x5TKoYtIaiOr8ekPtLlbIRhpqHABuduMANzh+8JsSvQqd0hRbT1gcn8x7E1kaa3F8a2bYm/jHzFrHlLqw0upBplxY0xAs2MKsqA9KFRXKWu7IL/DV740tK6mYrlOzpSVMgY8WESN0RVlHmWf72DLHaLw9q7CjdJCUXgFgklv7F9R4RYIyj5PSIx0xWW+q5MTWIpEgavVzPDwnYqQOOUSjqwBTHfILPOz69AFgzeJqf59bBeTEOL8n4Vfx6QIPO0uqJXC9X2Dq+y2lI9uVx5TVIhqnRm6iWwciXs7O/tKhP8llilb6TQhc7yB7giXw3XlRo4cyUZdL+XfW+HsZwHLXIfAibls+wna8t/nNXlDlScZgoYN4LSBwI0XjiXHuorF5TEQGVL7brf3NPoGOlbVEu5BEgE+50DPJ4nj0pjIjVewBZ5lGT1ukWxlnYgCrvhwLOE5kxfil9uGS6gAAdLhQ57EEbgoITP2gRDQeGBnsNwVucuWAF3Hj2sZQQUHHOmPSzdv4eVulNDijhzfVlVKANh/Ho/PLzBQVrXx5zZbW40V2jKq985Egbn2wIVjQsAXlZkIwllpaZ593cuLHE4dJL2fnAGCcSyc8PoFbAiomCQDIlUXz9pLawEV9AERwpMXtQT2R35PQJObl7Az18CbHdx4eFXa8Zjtby/spowFAE7inqSbHYzeXm8lTOTZsvS5KSWKvq5PwIjuwbGTwsizUGTESnLF7M2tiXs66yEAnJ7Y1Ry8anJ0GgNpBOKFbHP+4MycS1BmENe7uIQPA/XfH7EvF7PUZ1VJHRuXcyFnTQleE5mQnJyhaJmcnAGCYWwMCKr6Z21o/3lImQxrf53b/8nti/7vnNGToqDxSYN1kArTcTGWr6oN9JscjABByob+F3kIufvRka7kMq/wFtw6spAmINr7TEaO7nypxetNNjglCDpycuDdm92YmMquUcr+Ku/M7093j0w685Mp6H8fH1jSE+rOPxyfYQYct8wiOJBjQyQmKZkaet4gshR5+PtL39EAEfu3G/kaDs9TfZ9ZcGiVb/Z6EpaaH8fwB5hKpjC1tNLV4sYkqtzm7ZZgvZQn2Mm0rIKq1ShdXDDbUBIY1/jNH6xmD1V+sDVzWjRI21GbrCZ9I38FAznJ61G0AcFdAxd8anPW+4gL4+mDuCDkvaiR9gu3Px3p0VNbdE7N78/fQTQiofI+jAzQqrh8dvkIp5eTbhls9JmcnQxp/3i/wuMpYX72hdi2stNJtMlVqJ+Nz5d1S4SOY5XSA447MvLvC4Cz+h09c2YcRgGwOQDKlKaji67vGX14J89sEggMJHj89d/Aocz6/0j5crmsKy/tG2Gno5JmJhdMyfTswBH7X0QFb4NsvTr12+Oe14m82haQX8TuODoQ1/FMxeO/j5LWNIamhQlhSafIL3P6ZCl+vU49O/Nr0KrlhdKQ/e5UIZSaUYTCGnZpTl/4Kkw+IncnIoyyYbalRgbWODlCltDh7xoMsFfOq3Z+u8CW+MjJ4MfuZiSa126ut1PSQftbkGDcFO+hB1mtyTGnIuqfYevL9uXVp6IWyTdbI/W2V8ltNAzLoL32umhM1zhGYRX0VoReEfz4yOiy/PToiOyLepMHxfSqiEwKeroCaRiZuhEEQz/TzixmDNfShTyjpdoJO4S4YmLrCmbV2BmlmfsH3kTEqsl7B2H8CApMeZOcJ36dRlT4eEhTjQdwCALcCQDQjg5q9JQGOT4RVTnjTHZliF84Y7rYt/9BE8Eosg1AIACi/Fp9Nh2iIhggK0n8B75Y76GL3rcMAAAAASUVORK5CYII=" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Unbounded:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+            display: ['Chakra Petch', 'Unbounded', 'sans-serif'],
+            brand: ['Unbounded', 'Chakra Petch', 'sans-serif']
+          },
+          colors: {
+            obsidian: {
+              950: '#07090e',
+              900: '#0c1018',
+              800: '#121824',
+              700: '#1b2333'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root {
+      --glare-x: 50%;
+      --glare-y: 50%;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    /* Атмосферный фон Radiant vs Dire поверх тактической сетки */
+    body {
+      background-color: #07090e;
+      background-image:
+        radial-gradient(circle at 6% 22%, rgba(16, 185, 129, 0.09) 0%, transparent 45%),
+        radial-gradient(circle at 94% 22%, rgba(225, 29, 72, 0.11) 0%, transparent 48%),
+        radial-gradient(circle at 50% 0%, rgba(244, 63, 94, 0.05) 0%, transparent 40%),
+        linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 100% 100%, 34px 34px, 34px 34px;
+      background-attachment: fixed;
+      color: #e2e8f0;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, .esports-heading {
+      font-family: 'Chakra Petch', 'Unbounded', sans-serif;
+      letter-spacing: 0.02em;
+    }
+
+    /* Кастомный курсор Awwwards-уровня (только для ПК с мышью) */
+    @media (hover: hover) and (pointer: fine) {
+      #cursor-dot, #cursor-ring, #cursor-trail-canvas {
+        display: block;
+      }
+    }
+    @media (hover: none), (pointer: coarse) {
+      #cursor-dot, #cursor-ring, #cursor-trail-canvas {
+        display: none !important;
+      }
+    }
+
+    #cursor-trail-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9997;
+    }
+
+    #cursor-dot {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 7px;
+      height: 7px;
+      border-radius: 9999px;
+      background: #f43f5e;
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.9);
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+    }
+
+    #cursor-ring {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 34px;
+      height: 34px;
+      border-radius: 9999px;
+      border: 1.5px solid rgba(244, 63, 94, 0.55);
+      background: rgba(244, 63, 94, 0.03);
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                  height 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                  background-color 0.25s ease,
+                  border-color 0.25s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      mix-blend-mode: difference;
+    }
+
+    #cursor-ring.cursor-hover {
+      width: 64px;
+      height: 64px;
+      border-color: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    #cursor-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #ffffff;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      white-space: nowrap;
+    }
+
+    #cursor-ring.cursor-hover #cursor-label {
+      opacity: 1;
+    }
+
+    /* Карточки и 3D-Tilt ТОЛЬКО на верхнем уровне (никакого 3D на 3D) */
+    .pro-card {
+      background-color: rgba(12, 16, 24, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 12px 34px -10px rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(12px);
+    }
+
+    .pro-subcard {
+      background-color: rgba(18, 24, 36, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+    }
+
+    /* Мягкий премиальный блик (Specular Glare) без потери читаемости текста */
+    .tilt-surface {
+      position: relative;
+      will-change: transform;
+      transform-style: flat; /* Текст внутри всегда 100% четкий и не размывается */
+    }
+
+    .tilt-surface::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: radial-gradient(
+        420px circle at var(--glare-x, 50%) var(--glare-y, 50%),
+        rgba(255, 255, 255, 0.065),
+        transparent 70%
+      );
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 2;
+    }
+
+    .tilt-surface:hover::after {
+      opacity: 1;
+    }
+
+    .verdict-banner-ruin {
+      background: linear-gradient(135deg, rgba(225, 29, 72, 0.17) 0%, rgba(12, 16, 24, 0.96) 65%);
+      border: 1px solid rgba(244, 63, 94, 0.38);
+      box-shadow: 0 0 42px -12px rgba(225, 29, 72, 0.30);
+    }
+    .verdict-banner-anchor {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(12, 16, 24, 0.96) 65%);
+      border: 1px solid rgba(245, 158, 11, 0.32);
+      box-shadow: 0 0 36px -12px rgba(245, 158, 11, 0.22);
+    }
+    .verdict-banner-clean {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(12, 16, 24, 0.96) 65%);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+    }
+
+    .tab-btn-active {
+      background: linear-gradient(180deg, #1e2738 0%, #151c28 100%);
+      color: #ffffff;
+      border-color: rgba(244, 63, 94, 0.48);
+      box-shadow: 0 2px 14px rgba(225, 29, 72, 0.22);
+    }
+    .tab-btn-inactive {
+      background-color: transparent;
+      color: #94a3b8;
+      border-color: transparent;
+    }
+    .tab-btn-inactive:hover {
+      color: #e2e8f0;
+      background-color: rgba(28, 36, 51, 0.45);
+    }
+
+    /* Киберспортивный бейдж имени героя */
+    .hero-name-chip {
+      font-family: 'Chakra Petch', 'JetBrains Mono', sans-serif;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 1px 7px;
+      border-radius: 5px;
+      background-color: rgba(99, 102, 241, 0.15);
+      color: #c7d2fe;
+      border: 1px solid rgba(99, 102, 241, 0.30);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.73rem;
+      line-height: 1.25;
+      vertical-align: baseline;
+      white-space: nowrap;
+    }
+
+    /* Безопасный атмосферный фон карточки «Главный якорь матча» */
+    .culprit-atmo-bg {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 55%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .culprit-atmo-bg img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      opacity: 0.18;
+      filter: blur(8px) saturate(1.3);
+      -webkit-mask-image: radial-gradient(circle at 80% 40%, black 10%, transparent 75%);
+      mask-image: radial-gradient(circle at 80% 40%, black 10%, transparent 75%);
+    }
+
+    /* Свечение круговой диаграммы Индекса Руина */
+    .radial-crimson-glow {
+      filter: drop-shadow(0 0 10px rgba(244, 63, 94, 0.65));
+    }
+    .radial-amber-glow {
+      filter: drop-shadow(0 0 9px rgba(245, 158, 11, 0.55));
+    }
+    .radial-emerald-glow {
+      filter: drop-shadow(0 0 9px rgba(16, 185, 129, 0.50));
+    }
+
+    /* Эффект жидкого геля (Gooey Button) для главных CTA-кнопок */
+    .gooey-btn-wrap {
+      position: relative;
+      display: inline-flex;
+      filter: url('#gooey-fx');
+    }
+    .gooey-blob {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #e11d48, #f59e0b);
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.4);
+      transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: -1;
+    }
+    .gooey-btn-wrap:hover .gooey-blob {
+      opacity: 0.85;
+      transform: translate(-50%, -50%) scale(1.25);
+    }
+
+    /* Кинетическая типографика: плавное появление слов */
+    .kinetic-word {
+      display: inline-block;
+      will-change: transform, opacity;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #07090e;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-rose-500 selection:text-white">
+
+  <!-- Скрытый SVG-фильтр для эффекта жидкого геля (Gooey Effect) -->
+  <svg class="hidden" width="0" height="0" aria-hidden="true">
+    <defs>
+      <filter id="gooey-fx">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -8" result="goo" />
+        <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- Кастомный курсор и холст для шлейфа частиц -->
+  <canvas id="cursor-trail-canvas"></canvas>
+
+  <!-- Всплывающий Toast для копирования отчета -->
+  <div id="copyToast" class="fixed bottom-5 right-5 z-50 hidden px-4 py-3 rounded-xl bg-slate-900 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-semibold shadow-2xl flex items-center gap-2.5">
+    <span>✅</span>
+    <span id="copyToastText">Вердикт скопирован в буфер обмена!</span>
+  </div>
+
+  <!-- Шапка сайта -->
+  <header class="border-b border-white/[0.08] bg-[#07090e]/90 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-[1840px] mx-auto px-4 sm:px-6 xl:px-10 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div onclick="showLandingScreen()" data-cursor="ГЛАВНАЯ" title="На начальный экран" class="flex items-center gap-3.5 cursor-pointer group">
+        <div class="relative flex items-center justify-center shrink-0">
+          <img
+            src="data:image/png;base64,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"
+            alt="Dota 2 Logo"
+            class="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-[0_0_12px_rgba(239,68,68,0.55)] transition-transform group-hover:scale-105"
+          />
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <h1 class="font-brand text-base sm:text-xl font-extrabold tracking-wider uppercase flex items-center gap-2">
+              <span class="text-white drop-shadow-sm group-hover:text-rose-100 transition">DOTA 2</span>
+              <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-rose-500 to-amber-400">RUIN DETECTOR</span>
+            </h1>
+            <span class="text-[10px] uppercase tracking-widest font-mono font-bold px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
+              AI HUD v5.8
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">Поминутная криминалистика матчей, Мини-ИИ оценщик билдов и детектор скрытого руина</p>
+        </div>
+      </div>
+
+      <!-- Поиск матча прямо в шапке -->
+      <div class="flex items-center gap-2.5 flex-1 max-w-xl justify-end">
+        <form id="searchForm" onsubmit="handleSearch(event)" class="flex items-center gap-2 flex-1 max-w-md">
+          <div class="relative flex-1">
+            <input
+              id="matchInput"
+              type="text"
+              value=""
+              placeholder="Match ID или ссылка (напр. 9014019510)..."
+              class="w-full bg-[#121824] border border-white/[0.1] focus:border-rose-500/80 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 outline-none font-mono transition"
+            />
+          </div>
+          <div class="gooey-btn-wrap">
+            <span class="gooey-blob"></span>
+            <button
+              type="submit"
+              id="analyzeBtn"
+              data-magnetic="0.22"
+              data-cursor="СКАН"
+              class="font-display uppercase tracking-wider px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs sm:text-sm transition flex items-center gap-1.5 shrink-0 shadow-md shadow-rose-950/50"
+            >
+              <span>Проверить</span>
+            </button>
+          </div>
+        </form>
+
+        <button
+          id="backToHomeBtn"
+          onclick="showLandingScreen()"
+          data-magnetic="0.18"
+          data-cursor="НАЗАД"
+          title="Вернуться на начальное окно поиска"
+          class="hidden font-display uppercase tracking-wider px-3 py-2 rounded-lg bg-[#121824] hover:bg-[#1b2333] text-slate-300 border border-white/[0.08] transition text-xs font-bold shrink-0"
+        >
+          ← Главная
+        </button>
+        <button
+          onclick="toggleHelpModal()"
+          data-magnetic="0.18"
+          data-cursor="INFO"
+          title="Как работает алгоритм"
+          class="font-display uppercase tracking-wider px-3 py-2 rounded-lg bg-[#121824] hover:bg-[#1b2333] text-slate-300 border border-white/[0.08] transition text-xs font-bold shrink-0"
+        >
+          Справка
+        </button>
+      </div>
+    </div>
+
+    <!-- Полоса недавно проверенных матчей -->
+    <div class="max-w-[1840px] mx-auto px-4 sm:px-6 xl:px-10 pb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div id="recentMatchesRow" class="flex flex-wrap items-center gap-1.5"></div>
+      <p id="errorBox" class="hidden text-xs text-rose-300 bg-rose-950/70 border border-rose-800/60 rounded-lg px-3 py-1"></p>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-[1840px] w-full mx-auto px-4 sm:px-6 xl:px-10 py-5 space-y-5">
+
+    <!-- ======================================================================= -->
+    <!-- НАЧАЛЬНОЕ ОКНО (СТАРТОВЫЙ ЭКРАН ПРИ ОТКРЫТИИ САЙТА)                     -->
+    <!-- ======================================================================= -->
+    <section id="landingHeroSection" class="py-4 sm:py-8 space-y-6">
+      <div class="relative overflow-hidden rounded-3xl pro-card tilt-surface border border-white/[0.1] p-6 sm:p-10 xl:p-12 shadow-2xl" data-tilt="2.2">
+        <!-- Атмосферное киберспортивное свечение на фоне -->
+        <div class="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-emerald-500/10 blur-3xl"></div>
+        <div class="pointer-events-none absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-rose-600/15 blur-3xl"></div>
+
+        <div class="relative z-10 max-w-4xl mx-auto text-center space-y-6">
+          <div class="inline-flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-full bg-[#121824]/90 border border-rose-500/30 text-[11px] font-mono text-rose-300 shadow-inner">
+            <span>⚡ OFFICIAL DOTA 2 TELEMETRY</span>
+            <span class="text-slate-600">•</span>
+            <span class="text-emerald-400">STRATZ GRAPHQL + OPENDOTA LIVE META</span>
+            <span class="text-slate-600">•</span>
+            <span class="text-amber-300">6-АРХЕТИПНЫЙ МИНИ-ИИ БИЛДОВ</span>
+          </div>
+
+          <div class="flex flex-col items-center justify-center gap-3">
+            <img
+              src="data:image/png;base64,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"
+              alt="Dota 2"
+              class="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-[0_0_24px_rgba(239,68,68,0.65)]"
+            />
+            <h2 id="heroKineticHeading" class="font-brand text-2xl sm:text-4xl lg:text-5xl font-extrabold uppercase tracking-tight text-white leading-tight">
+              <span class="kinetic-word">УЗНАЙ,</span>
+              <span class="kinetic-word">КТО</span>
+              <span class="kinetic-word">НА</span>
+              <span class="kinetic-word">САМОМ</span>
+              <span class="kinetic-word">ДЕЛЕ</span>
+              <span class="kinetic-word text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-rose-500 to-amber-400">СЛИЛ ТВОЮ КАТКУ</span>
+            </h2>
+            <p class="text-xs sm:text-base text-slate-300 max-w-2xl leading-relaxed">
+              Вставьте <span class="font-mono text-white font-semibold">Match ID</span> или ссылку на матч из Dotabuff, STRATZ или OpenDota. Система проведет поминутный аудит всех 10 игроков, оценит контр-закуп против всего вражеского пика и вычислит Главного Якоря по шкале от <span class="font-mono text-rose-400 font-bold">0 до 100</span>.
+            </p>
+          </div>
+
+          <!-- Центральная форма поиска матча -->
+          <form onsubmit="handleHeroSearch(event)" class="max-w-2xl mx-auto pt-2">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 p-2 rounded-2xl bg-[#07090e]/95 border border-white/[0.12] focus-within:border-rose-500/80 shadow-2xl transition">
+              <div class="flex items-center gap-3 flex-1 px-3 py-2">
+                <span class="text-slate-400 text-lg select-none">🔍</span>
+                <input
+                  id="heroMatchInput"
+                  type="text"
+                  value=""
+                  placeholder="Введите ID матча (например, 9014019510) или ссылку..."
+                  class="w-full bg-transparent text-sm sm:text-base text-white placeholder-slate-500 outline-none font-mono"
+                />
+              </div>
+              <div class="gooey-btn-wrap shrink-0">
+                <span class="gooey-blob"></span>
+                <button
+                  type="submit"
+                  id="heroAnalyzeBtn"
+                  data-magnetic="0.22"
+                  data-cursor="АУДИТ"
+                  class="w-full sm:w-auto font-display uppercase tracking-wider px-6 py-3.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold text-xs sm:text-sm transition shadow-lg shadow-rose-950/60 shrink-0"
+                >
+                  Проанализировать матч →
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- Быстрые действия: Демо-матч в 1 клик и недавние проверки -->
+          <div class="flex flex-wrap items-center justify-center gap-2.5 pt-1 text-xs">
+            <span class="text-slate-400">Нет ID под рукой?</span>
+            <button
+              type="button"
+              onclick="quickLoadMatch('9041259372')"
+              data-magnetic="0.18"
+              data-cursor="ДЕМО"
+              class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/35 font-mono font-semibold transition"
+            >
+              <span>🎮 Запустить демо-разбор (#9041259372)</span>
+            </button>
+            <button
+              type="button"
+              onclick="toggleHelpModal()"
+              data-magnetic="0.18"
+              data-cursor="СПРАВКА"
+              class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#121824] hover:bg-[#1b2333] text-slate-300 border border-white/[0.08] font-display uppercase tracking-wider font-bold transition"
+            >
+              <span>📖 Как считает алгоритм</span>
+            </button>
+          </div>
+
+          <div id="heroRecentMatchesBox" class="pt-2 flex flex-wrap items-center justify-center gap-2 text-xs"></div>
+        </div>
+      </div>
+
+      <!-- Сетка ключевых возможностей под главным окном (3D-Tilt только на этих карточках) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="p-5 rounded-2xl pro-card tilt-surface border-t-2 border-t-rose-500/70 space-y-2" data-tilt="4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">AI BUILD MATRIX</span>
+            <span class="text-lg">🤖</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">Мини-ИИ Оценщик Билдов</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Проверяет все 60 слотов против пика врага: ловит отсутствие <span class="font-mono text-slate-200">Nullifier</span> против <span class="font-mono text-slate-200">Eul's/Ghost</span>, игнор <span class="font-mono text-slate-200">MKB</span> против <span class="font-mono text-slate-200">Butterfly</span>, отсутствие <span class="font-mono text-slate-200">Silver Edge</span> в пассивки и <span class="font-mono text-slate-200">Vessel/Skadi</span> в хил.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl pro-card tilt-surface border-t-2 border-t-emerald-500/70 space-y-2" data-tilt="4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">LIVE TELEMETRY</span>
+            <span class="text-lg">📈</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">График переломов и Хронология</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Интерактивный график золота с поминутным прицелом (Crosshair). Автоматически находит переломный замес, драки без ультимейтов (в КД) и бессмысленные отдачи <span class="font-mono text-slate-200">0 в 4</span>.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl pro-card tilt-surface border-t-2 border-t-sky-500/70 space-y-2" data-tilt="4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">HEAD-TO-HEAD</span>
+            <span class="text-lg">⚔️</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">Дуэль 1 на 1 (Tug-of-War)</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Прямое сравнение любых двух игроков матча по 8 параметрам на двухцветной симметричной шкале от центра с общим табло счета дуэли.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-2xl pro-card tilt-surface border-t-2 border-t-amber-500/70 space-y-2" data-tilt="4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">FORENSIC SCORE</span>
+            <span class="text-lg">⚖️</span>
+          </div>
+          <h3 class="font-display text-sm sm:text-base font-bold text-white uppercase">Двухконтурный Индекс 0–100</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Отличает явный саботаж (разбитые шмотки, намеренный фид, амулет) от скрытого балласта («Главного Якоря») и защищает саппортов амнистией за вижен и сейв.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- ОСНОВНОЙ ДАШБОРД РАЗБОРА МАТЧА                                          -->
+    <!-- ======================================================================= -->
+    <section id="verdictSection" class="hidden space-y-5">
+      <!-- 1. ВЕРХНИЙ РЯД: ГЛАВНЫЙ ВЕРДИКТ (8 кол) + СВОДКА МАТЧА (4 кол) -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
+        <div id="verdictCard" data-tilt="2.5" class="xl:col-span-8 relative overflow-hidden rounded-2xl p-5 sm:p-6 transition-all flex flex-col justify-between tilt-surface"></div>
+        <div id="matchQuickHighlightsCard" data-tilt="2.8" class="xl:col-span-4 pro-card tilt-surface rounded-2xl p-5 flex flex-col justify-between gap-3"></div>
+      </div>
+
+      <!-- 2. ДРАФТ-БАР 5 vs 5 -->
+      <div class="pro-card rounded-xl px-4 py-3.5">
+        <div class="flex items-center justify-between text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-2.5 px-1">
+          <span id="draftRadiantHeader" class="font-display text-emerald-400 tracking-wider">🟢 Силы Света (Radiant)</span>
+          <span class="text-slate-500 hidden sm:inline">Выберите портрет героя (🗡️1 Керри • ⚡2 Мид • 🛡️3 Оффлейн • 🎯4 Роум • 👁️5 Саппорт)</span>
+          <span id="draftDireHeader" class="font-display text-rose-400 tracking-wider">🔴 Силы Тьмы (Dire)</span>
+        </div>
+        <div id="heroDraftStrip" class="grid grid-cols-1 lg:grid-cols-11 gap-2 items-center"></div>
+      </div>
+
+      <!-- 3. НАВИГАЦИЯ ПО РЕЖИМАМ -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-3">
+        <div class="inline-flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-[#0c1018] border border-white/[0.07]">
+          <button
+            id="tabBtn-dossier"
+            onclick="switchWorkspaceTab('dossier')"
+            data-magnetic="0.14"
+            data-cursor="ДОСЬЕ"
+            class="font-display uppercase tracking-wider px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold border transition flex items-center gap-2 tab-btn-active"
+          >
+            <span>🎯 Разбор игрока и Командный радар</span>
+          </button>
+          <button
+            id="tabBtn-chronology"
+            onclick="switchWorkspaceTab('chronology')"
+            data-magnetic="0.14"
+            data-cursor="ГРАФИК"
+            class="font-display uppercase tracking-wider px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold border transition flex items-center gap-2 tab-btn-inactive"
+          >
+            <span>📈 Хронология и График золота</span>
+            <span id="chronoCountBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.07] text-slate-300">0</span>
+          </button>
+          <button
+            id="tabBtn-versus"
+            onclick="switchWorkspaceTab('versus')"
+            data-magnetic="0.14"
+            data-cursor="1 VS 1"
+            class="font-display uppercase tracking-wider px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold border transition flex items-center gap-2 tab-btn-inactive"
+          >
+            <span>⚔️ Дуэль 1 на 1 (Сравнение)</span>
+          </button>
+          <button
+            id="tabBtn-scoreboard"
+            onclick="switchWorkspaceTab('scoreboard')"
+            data-magnetic="0.14"
+            data-cursor="ТАБЛИЦА"
+            class="font-display uppercase tracking-wider px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold border transition flex items-center gap-2 tab-btn-inactive"
+          >
+            <span>📊 Полная таблица (10)</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            onclick="copyMatchReport()"
+            data-magnetic="0.18"
+            data-cursor="КОПИЯ"
+            class="font-display uppercase tracking-wider px-3.5 py-2 rounded-xl bg-[#121824] hover:bg-[#1b2333] text-slate-200 border border-white/[0.09] text-xs font-bold transition flex items-center gap-1.5"
+          >
+            <span>📋 Скопировать отчёт для чата</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 1: 3-КОЛОНОЧНЫЙ WIDESCREEN ДАШБОРД -->
+      <div id="tabPanel-dossier" class="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+        <!-- ЛЕВАЯ БОКОВАЯ ПАНЕЛЬ (3 колонки) -->
+        <div class="xl:col-span-3 space-y-5 order-2 xl:order-1">
+          <div class="pro-card rounded-2xl p-5 space-y-4">
+            <div class="border-b border-white/[0.07] pb-3">
+              <span class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Макро-статистика 5v5</span>
+              <h3 class="text-sm sm:text-base font-bold text-white mt-0.5 uppercase">Перевес команд по ресурсам</h3>
+            </div>
+            <div id="teamMacroRadarBody" class="space-y-3.5"></div>
+          </div>
+
+          <div class="pro-card rounded-2xl p-5 space-y-3.5">
+            <div class="border-b border-white/[0.07] pb-3">
+              <span class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Дуэли по позициям</span>
+              <h3 class="text-sm sm:text-base font-bold text-white mt-0.5 uppercase">Кто кого переиграл по роли?</h3>
+            </div>
+            <div id="laneMatchupsSidebar" class="space-y-2"></div>
+          </div>
+        </div>
+
+        <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА (6 колонок): Досье выбранного игрока -->
+        <div class="xl:col-span-6 pro-card relative overflow-hidden rounded-2xl p-5 sm:p-6 space-y-5 order-1 xl:order-2">
+          <div class="culprit-atmo-bg" style="height: 150px; opacity: 0.75;">
+            <img id="inspectorBgHeroImg" src="" alt="" onerror="this.style.display='none'" />
+          </div>
+
+          <div class="relative z-10 border-b border-white/[0.07] pb-4 space-y-3.5">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div class="flex items-center gap-3.5">
+                <img id="inspectorHeroImg" src="" alt="" class="w-16 h-10 rounded-lg object-cover border border-white/15 bg-slate-900 shadow-md shrink-0" onerror="this.style.display='none'" />
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span id="inspectorTypeBadge" class="font-display text-[11px] uppercase tracking-wider font-bold text-rose-400">—</span>
+                    <span id="inspectorRoleBadge" class="text-[11px] font-mono px-2.5 py-0.5 rounded bg-[#121824] text-slate-300 border border-white/[0.08]">—</span>
+                  </div>
+                  <div id="inspectorTitle" class="font-display text-xl sm:text-2xl font-bold text-white mt-1 flex flex-wrap items-center gap-2">—</div>
+                </div>
+              </div>
+              <div id="inspectorRadialBox" class="shrink-0"></div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+              <div id="inspectorBadgesRow" class="flex flex-wrap items-center gap-1.5"></div>
+              <div id="inspectorInventoryRow" class="flex flex-wrap items-center gap-1.5"></div>
+            </div>
+          </div>
+
+          <!-- ОЦЕНЩИК БИЛДА И ТАЙМИНГОВ ПРОТИВ ПИКА ВРАГА -->
+          <div id="inspectorBuildAudit" class="relative z-10"></div>
+
+          <!-- 4 метрики -->
+          <div class="relative z-10 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <h4 class="font-display text-xs font-bold uppercase tracking-wider text-slate-300">
+                Разбивка по категориям аудита
+              </h4>
+              <span id="inspectorTotalScorePill" class="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded border"></span>
+            </div>
+            <div id="inspectorBars" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+            <div id="inspectorSupportCard"></div>
+          </div>
+
+          <!-- 3 лаконичные плашки выводов -->
+          <div id="inspectorForensics" class="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-2.5"></div>
+
+          <!-- Список улик с быстрым фильтром -->
+          <div class="relative z-10 space-y-3 pt-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h4 class="font-display text-xs font-bold uppercase tracking-wider text-slate-300">
+                Детальные таймкоды и улики игрока
+              </h4>
+              <div class="inline-flex items-center gap-1 p-0.5 rounded-lg bg-[#121824] border border-white/[0.06] text-[11px]">
+                <button id="reasonFilter-all" onclick="setReasonFilter('all')" class="px-2.5 py-1 rounded-md font-semibold bg-[#1b2333] text-white">Все</button>
+                <button id="reasonFilter-penalties" onclick="setReasonFilter('penalties')" class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white">Ошибки</button>
+                <button id="reasonFilter-bonuses" onclick="setReasonFilter('bonuses')" class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white">Плюсы</button>
+              </div>
+            </div>
+            <div id="inspectorReasons" class="space-y-2"></div>
+          </div>
+        </div>
+
+        <!-- ПРАВАЯ КОЛОНКА (3 колонки): Рейтинг всех 10 игроков -->
+        <div class="xl:col-span-3 pro-card rounded-2xl p-5 space-y-4 order-3">
+          <div class="flex items-center justify-between border-b border-white/[0.07] pb-3">
+            <div>
+              <span class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Рейтинг виновности</span>
+              <h3 class="text-sm sm:text-base font-bold text-white mt-0.5 uppercase">Все 10 участников</h3>
+            </div>
+            <span class="text-[10px] text-slate-400 bg-[#121824] px-2 py-1 rounded-lg border border-white/[0.06]">
+              Клик для выбора
+            </span>
+          </div>
+          <div id="ruinLeaderboard" class="space-y-2 max-h-[820px] overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 2: ХРОНОЛОГИЯ МАТЧА + ИНТЕРАКТИВНЫЙ SVG-ГРАФИК ЗОЛОТА -->
+      <div id="tabPanel-chronology" class="hidden space-y-5">
+        <div class="pro-card rounded-2xl p-5 sm:p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span class="text-[11px] uppercase tracking-wider font-bold text-slate-400">График преимущества и переломов</span>
+              <h3 class="text-base sm:text-lg font-bold text-white mt-0.5 uppercase">Динамика золота и ключевые моменты</h3>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+              <span class="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
+                <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500/80"></span> Преимущество Radiant
+              </span>
+              <span class="inline-flex items-center gap-1.5 text-rose-400 font-medium">
+                <span class="w-2.5 h-2.5 rounded-sm bg-rose-500/80"></span> Преимущество Dire
+              </span>
+            </div>
+          </div>
+          <div id="goldSwingChartContainer" class="w-full overflow-x-auto"></div>
+        </div>
+
+        <div class="pro-card rounded-2xl p-5 sm:p-6 space-y-4">
+          <div class="border-b border-white/[0.07] pb-3">
+            <span class="text-[11px] uppercase tracking-wider font-bold text-slate-400">Пошаговый разбор игры</span>
+            <h3 class="text-base sm:text-lg font-bold text-white mt-0.5 uppercase">Хронология матча: от лайнинга до падения трона</h3>
+          </div>
+          <div id="matchChronologyGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5"></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 3: ДУЭЛЬ 1 НА 1 (HEAD-TO-HEAD СРАВНЕНИЕ ИГРОКОВ) -->
+      <div id="tabPanel-versus" class="hidden pro-card rounded-2xl p-5 sm:p-6 space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
+          <div>
+            <span class="text-[11px] uppercase tracking-wider font-bold text-slate-400">Head-to-Head Сравнение</span>
+            <h3 class="text-base sm:text-lg font-bold text-white mt-0.5 uppercase">Дуэль двух игроков по ключевым показателям</h3>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-xs text-slate-400 mr-1">Быстро сравнить:</span>
+            <button onclick="setVersusByRole(1)" class="px-2.5 py-1 rounded-lg bg-[#121824] hover:bg-[#1b2333] text-xs font-medium text-slate-200 border border-white/[0.07] transition">🗡️ Керри vs Керри</button>
+            <button onclick="setVersusByRole(2)" class="px-2.5 py-1 rounded-lg bg-[#121824] hover:bg-[#1b2333] text-xs font-medium text-slate-200 border border-white/[0.07] transition">⚡ Мид vs Мид</button>
+            <button onclick="setVersusByRole(3)" class="px-2.5 py-1 rounded-lg bg-[#121824] hover:bg-[#1b2333] text-xs font-medium text-slate-200 border border-white/[0.07] transition">🛡️ Оффлейн vs Оффлейн</button>
+            <button onclick="setVersusTopRuiners()" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-xs font-semibold text-rose-300 border border-rose-500/30 transition">Топ-1 vs Топ-2 якорь</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1.5">Игрок А (Слева)</label>
+            <select id="versusSelectA" onchange="renderVersusPanel()" class="w-full bg-[#121824] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white outline-none"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1.5">Игрок Б (Справа)</label>
+            <select id="versusSelectB" onchange="renderVersusPanel()" class="w-full bg-[#121824] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white outline-none"></select>
+          </div>
+        </div>
+
+        <div id="versusComparisonBody" class="space-y-4 pt-1"></div>
+      </div>
+
+      <!-- ВКЛАДКА 4: ПОЛНАЯ ТАБЛИЦА МАТЧА С ФИЛЬТРАМИ -->
+      <div id="tabPanel-scoreboard" class="hidden pro-card rounded-2xl p-5 sm:p-6 space-y-4 overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-white uppercase">Сводная таблица всех участников</h3>
+            <p class="text-xs text-slate-400">Кликните на любую строку, чтобы перейти в детальное досье и оценщик билда игрока</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button id="tableFilter-all" onclick="setTableFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1b2333] text-white border border-white/10">Все (10)</button>
+            <button id="tableFilter-radiant" onclick="setTableFilter('radiant')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#121824] text-emerald-400 border border-white/[0.06] hover:bg-[#1b2333]">Radiant</button>
+            <button id="tableFilter-dire" onclick="setTableFilter('dire')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#121824] text-rose-400 border border-white/[0.06] hover:bg-[#1b2333]">Dire</button>
+            <button id="tableFilter-cores" onclick="setTableFilter('cores')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#121824] text-slate-300 border border-white/[0.06] hover:bg-[#1b2333]">Коры (Pos 1–3)</button>
+            <button id="tableFilter-supports" onclick="setTableFilter('supports')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#121824] text-slate-300 border border-white/[0.06] hover:bg-[#1b2333]">Саппорты (Pos 4–5)</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto -mx-5 sm:mx-0">
+          <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="border-b border-white/[0.08] text-slate-400 uppercase tracking-wider text-[11px] bg-[#121824] font-display">
+                <th class="py-3 px-4">Игрок и Герой</th>
+                <th class="py-3 px-3">Позиция</th>
+                <th class="py-3 px-3">Инвентарь и тайминги</th>
+                <th class="py-3 px-3 text-center">K / D / A</th>
+                <th class="py-3 px-3 text-right" title="Доля участия в командных убийствах (KP %)">Драки</th>
+                <th class="py-3 px-3 text-right" title="Доля урона игрока от всего урона команды по героям">Доля урона</th>
+                <th class="py-3 px-3 text-right" title="Сколько урона нанес на каждую единицу заработанного золота">Урон/Золото</th>
+                <th class="py-3 px-3 text-right" title="Какой процент крипов был убит в лесу">Лес</th>
+                <th class="py-3 px-3 text-right" title="Урон по башням и баракам">Башни</th>
+                <th class="py-3 px-3 text-right" title="Установлено Observer и Sentry вардов">Варды</th>
+                <th class="py-3 px-4 text-right">Очки вины</th>
+              </tr>
+            </thead>
+            <tbody id="scoreboardBody" class="divide-y divide-white/[0.05]"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Официальный подвал (Footer) -->
+  <footer class="mt-10 border-t border-white/[0.08] bg-[#05070b]/95 text-slate-400">
+    <div class="max-w-[1840px] mx-auto px-4 sm:px-6 xl:px-10 py-7 space-y-5">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-5 border-b border-white/[0.06]">
+        <div class="flex items-center gap-3">
+          <img
+            src="data:image/png;base64,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"
+            alt="Dota 2"
+            class="w-8 h-8 object-contain opacity-90"
+          />
+          <div>
+            <div class="font-brand text-xs sm:text-sm font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
+              <span>VALVE</span>
+              <span class="text-slate-600">•</span>
+              <span>DOTA 2 OFFICIAL TELEMETRY &amp; RUIN DETECTOR</span>
+            </div>
+            <div class="text-[11px] text-slate-500 font-mono">
+              Powered by Steam Web API • OpenDota API • STRATZ GraphQL Engine
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+          <span class="px-2.5 py-1 rounded-md bg-[#0c1018] border border-white/[0.07] text-emerald-400">● Steam API: Online</span>
+          <span class="px-2.5 py-1 rounded-md bg-[#0c1018] border border-white/[0.07] text-sky-400">● STRATZ Meta: Synced</span>
+          <span class="px-2.5 py-1 rounded-md bg-[#0c1018] border border-white/[0.07] text-slate-300">Patch 7.41+</span>
+        </div>
+      </div>
+
+      <div class="space-y-2 text-[11px] text-slate-500 leading-relaxed">
+        <p class="text-slate-400 font-medium">
+          © 2026 Valve Corporation. Все права защищены. Dota, логотип Dota 2, Steam и логотип Steam являются товарными знаками и/или зарегистрированными товарными знаками корпорации Valve (Valve Corporation) в США и других странах.
+        </p>
+        <p>
+          Все внутриигровые изображения героев, иконки предметов, названия способностей и данные матчей являются исключительной собственностью <strong class="text-slate-400">Valve Corporation</strong>. Аналитическая платформа работает на базе официальной телеметрии Steam Web API, OpenDota и STRATZ GraphQL.
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Модальное окно справки -->
+  <div id="helpModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target === this) toggleHelpModal()">
+    <div class="pro-card rounded-2xl max-w-2xl w-full p-6 sm:p-7 space-y-5 max-h-[90vh] overflow-y-auto border border-white/15 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/[0.08] pb-4">
+        <div>
+          <h2 class="text-lg sm:text-xl font-bold text-white uppercase">Как работает Dota 2 Ruin Detector v5.8</h2>
+          <p class="text-xs sm:text-sm text-slate-400 mt-0.5">Стандартизированный аудит матчей, сборок и таймлайна</p>
+        </div>
+        <button onclick="toggleHelpModal()" class="w-8 h-8 rounded-lg bg-[#121824] hover:bg-[#1b2333] text-slate-300 hover:text-white flex items-center justify-center font-bold transition">✕</button>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300 leading-relaxed">
+        <div class="p-3.5 rounded-xl pro-subcard space-y-1">
+          <div class="font-display font-bold text-white uppercase">🛠️ Оценщик билда по мете OpenDota</div>
+          <p class="text-slate-400">Проверяет популярные сборки из <code class="text-slate-200 font-mono">/api/heroes/{id}/itemPopularity</code> и встроенные иммунитеты (<code class="text-slate-200 font-mono">Rage</code>, <code class="text-slate-200 font-mono">Blade Fury</code>, <code class="text-slate-200 font-mono">Dark Pact</code>). Герои со встроенным сейвом и диспелом не штрафуются за отсутствие BKB.</p>
+        </div>
+        <div class="p-3.5 rounded-xl pro-subcard space-y-1">
+          <div class="font-display font-bold text-white uppercase">💸 Детектор «Пустого нетворса»</div>
+          <p class="text-slate-400">Выявляет деньги на ветер: покупку <code class="text-slate-200 font-mono">Linken Sphere</code> против AoE-контроля и дешевых сбивалок (<code class="text-slate-200 font-mono">Track</code> / <code class="text-slate-200 font-mono">Haze</code>), а также неокупившиеся фарм-слоты (<code class="text-slate-200 font-mono">Battle Fury</code> / <code class="text-slate-200 font-mono">Midas</code> с низким уроном).</p>
+        </div>
+        <div class="p-3.5 rounded-xl pro-subcard space-y-1">
+          <div class="font-display font-bold text-white uppercase">📈 График золота и Хронология</div>
+          <p class="text-slate-400">Сопоставляет кривую золота с логом каждого замеса: находит переломный файт, драки с ультимейтами в КД и сухие размены <code class="text-slate-200 font-mono">0 в 3</code> без объектов.</p>
+        </div>
+        <div class="p-3.5 rounded-xl pro-subcard space-y-1">
+          <div class="font-display font-bold text-white uppercase">⚔️ Макро-радар 5v5 и Дуэль 1 на 1</div>
+          <p class="text-slate-400">На широкоформатном экране слева отображается радар ресурсов команд и быстрые дуэли линий, а справа — полный рейтинг всех 10 игроков.</p>
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button onclick="toggleHelpModal()" class="font-display uppercase tracking-wider px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm transition">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Заглушка module.exports для браузера -->
+  <script>window.module = { exports: {} };</script>
+  <!-- 1. Подключаем analyzer.js -->
+  <script src="analyzer.js"></script>
+  <!-- Пробрасываем все экспортированные функции (включая analyzeMatchWithLlm и analyzeMatch) в глобальный window -->
+  <script>
+    if (window.module && window.module.exports) {
+      Object.assign(window, window.module.exports);
+    }
+  </script>
+  <!-- 2. Подключаем app.js -->
+  <script src="app.js"></script>
+
+  <!-- 3. Модуль Awwwards-эффектов (ТОЛЬКО партиклы мыши + 3D Tilt + Magnetic + GSAP) -->
+  <script>
+    (function initAwwwardsFX() {
+      const isFinePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      const canvas = document.getElementById('cursor-trail-canvas');
+      const ctx = canvas ? canvas.getContext('2d') : null;
+
+      // Скрываем круги, если они остались в разметке
+      const oldDot = document.getElementById('cursor-dot');
+      const oldRing = document.getElementById('cursor-ring');
+      if (oldDot) oldDot.remove();
+      if (oldRing) oldRing.remove();
+
+      let mouseX = window.innerWidth / 2;
+      let mouseY = window.innerHeight / 2;
+      const particles = [];
+
+      function resizeCanvas() {
+        if (!canvas) return;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+
+      if (isFinePointer && canvas && ctx) {
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        window.addEventListener('mousemove', (e) => {
+          const dx = e.clientX - mouseX;
+          const dy = e.clientY - mouseY;
+          const speed = Math.hypot(dx, dy);
+          mouseX = e.clientX;
+          mouseY = e.clientY;
+
+          if (speed > 2 && particles.length < 38) {
+            particles.push({
+              x: mouseX,
+              y: mouseY,
+              vx: (Math.random() - 0.5) * 0.8,
+              vy: (Math.random() - 0.5) * 0.8,
+              r: Math.min(3.2, Math.max(1.2, speed * 0.06)),
+              alpha: 0.55,
+              hue: Math.random() > 0.35 ? '244, 63, 94' : '16, 185, 129'
+            });
+          }
+
+          // Обновляем позицию жидкого блоба внутри .gooey-btn-wrap
+          const gooeyWrap = e.target.closest && e.target.closest('.gooey-btn-wrap');
+          if (gooeyWrap) {
+            const blob = gooeyWrap.querySelector('.gooey-blob');
+            if (blob) {
+              const r = gooeyWrap.getBoundingClientRect();
+              blob.style.left = (e.clientX - r.left) + 'px';
+              blob.style.top = (e.clientY - r.top) + 'px';
+            }
+          }
+        });
+
+        function renderParticlesLoop() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= 0.024;
+            if (p.alpha <= 0) {
+              particles.splice(i, 1);
+              continue;
+            }
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${p.hue}, ${p.alpha.toFixed(2)})`;
+            ctx.fill();
+          }
+          requestAnimationFrame(renderParticlesLoop);
+        }
+        requestAnimationFrame(renderParticlesLoop);
+      }
+
+      window.refreshAwwwardsInteractions = function () {
+        if (!isFinePointer || typeof gsap === 'undefined') return;
+
+        document.querySelectorAll('[data-tilt]:not([data-tilt-bound])').forEach((card) => {
+          card.setAttribute('data-tilt-bound', '1');
+          const maxDeg = parseFloat(card.getAttribute('data-tilt')) || 3.5;
+
+          card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const relX = (e.clientX - rect.left) / Math.max(1, rect.width);
+            const relY = (e.clientY - rect.top) / Math.max(1, rect.height);
+            card.style.setProperty('--glare-x', `${(relX * 100).toFixed(1)}%`);
+            card.style.setProperty('--glare-y', `${(relY * 100).toFixed(1)}%`);
+
+            const rotY = (relX - 0.5) * maxDeg * 2;
+            const rotX = (0.5 - relY) * maxDeg * 2;
+            gsap.to(card, {
+              rotationX: rotX,
+              rotationY: rotY,
+              transformPerspective: 1100,
+              duration: 0.35,
+              ease: 'power2.out',
+              overwrite: 'auto'
+            });
+          });
+
+          card.addEventListener('mouseleave', () => {
+            gsap.to(card, {
+              rotationX: 0,
+              rotationY: 0,
+              duration: 0.65,
+              ease: 'elastic.out(1, 0.5)',
+              overwrite: 'auto'
+            });
+          });
+        });
+
+        document.querySelectorAll('[data-magnetic]:not([data-mag-bound])').forEach((btn) => {
+          btn.setAttribute('data-mag-bound', '1');
+          const strength = parseFloat(btn.getAttribute('data-magnetic')) || 0.2;
+
+          btn.addEventListener('mousemove', (e) => {
+            const r = btn.getBoundingClientRect();
+            const dx = (e.clientX - (r.left + r.width / 2)) * strength;
+            const dy = (e.clientY - (r.top + r.height / 2)) * strength;
+            gsap.to(btn, { x: dx, y: dy, duration: 0.25, ease: 'power2.out', overwrite: 'auto' });
+          });
+
+          btn.addEventListener('mouseleave', () => {
+            gsap.to(btn, { x: 0, y: 0, duration: 0.6, ease: 'elastic.out(1, 0.4)', overwrite: 'auto' });
+          });
+        });
+      };
+
+      window.addEventListener('DOMContentLoaded', () => {
+        window.refreshAwwwardsInteractions();
+        if (typeof gsap !== 'undefined') {
+          gsap.from('#heroKineticHeading .kinetic-word', {
+            y: 28,
+            opacity: 0,
+            duration: 0.7,
+            stagger: 0.06,
+            ease: 'power3.out'
+          });
+          gsap.from('#landingHeroSection [data-tilt]', {
+            y: 24,
+            opacity: 0,
+            duration: 0.65,
+            stagger: 0.08,
+            delay: 0.15,
+            ease: 'power2.out'
+          });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

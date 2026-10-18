@@ -177,7 +177,9 @@ function startServer() {
     }
 
     if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html' || pathname === '/public/index.html')) {
-      const foundHtml = htmlPathCandidates.find(p => fs.existsSync(p));
+      const existingHtmls = htmlPathCandidates.filter(p => fs.existsSync(p));
+      existingHtmls.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+      const foundHtml = existingHtmls[0];
       if (foundHtml) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(fs.readFileSync(foundHtml, 'utf-8'));

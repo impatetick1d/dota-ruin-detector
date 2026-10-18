@@ -828,7 +828,7 @@ async function syncDotaConstantsAndMeta(heroIdsOrPlayers = [], options = {}) {
  * Формирование компактного JSON для LLM-аудита сборки (buildLlmAuditPayload)
  * и реальный вызов API модели (requestLlmBuildVerdict)
  */
-function buildLlmAuditPayload(player, roleInfo, invAudit, enemyPlayers, metaProfile, durationMin, netWorth, wonMatch) {
+function buildLlmAuditPayload(player, roleInfo, invAudit, enemyPlayers, metaProfile, durationMin, netWorth, wonMatch, targetThreatReport = null) {
   const isInnateOrElusive = INNATE_SPELL_IMMUNITY_OR_ELUSIVE_HERO_IDS.has(player.hero_id);
   const playerItemIds = invAudit.richItems.map(i => i.id);
   const matchedMetaItems = invAudit.richItems
@@ -869,6 +869,12 @@ function buildLlmAuditPayload(player, roleInfo, invAudit, enemyPlayers, metaProf
         .filter(id => id && id > 0)
         .map(id => (ITEMS_DB[id] && ITEMS_DB[id].name) || `Item #${id}`)
     })),
+    target_threat_resolution: targetThreatReport ? {
+      unresolved_evasion_weight: targetThreatReport.totalUnresolvedEvasionWeight,
+      mkb_strictly_required: targetThreatReport.mkbStrictlyRequired,
+      resolved_evasion_notes: targetThreatReport.resolvedNotes,
+      unresolved_evasion_sources: targetThreatReport.unresolvedLabels
+    } : null,
     meta_popularity: {
       bkb_is_popular_on_hero: metaProfile.bkbIsPopular,
       bkb_popularity_ratio: metaProfile.bkbRatio,
@@ -887,11 +893,12 @@ async function requestLlmBuildVerdict(llmPayload, options = {}) {
   if (!apiKey) return null;
 
   const systemPrompt = [
-    "Ты — профессиональный аналитик Dota 2 (7.41+). Оцени сборку предметов игрока на основе JSON со статистикой, инвентарем, пиком врага и популярными предметами из /api/heroes/{hero_id}/itemPopularity.",
-    "ВАЖНЫЕ ПРАВИЛА ДОТЫ:",
-    "1. Герои со встроенным иммунитетом к магии/диспелом/эскейпом (Lifestealer с Rage, Juggernaut с Blade Fury, Slark с Dark Pact, Phantom Lancer, Naga Siren, Weaver, Puck, Ember Spirit, Storm Spirit, Abaddon, Tidehunter) НЕ обязаны покупать BKB, если у них собраны слоты на диспел/сейв по мете (Manta Style, Satanic, Disperser, Lotus Orb, Sange and Yasha, Eternal Shroud, Aghanim Scepter). Никогда не штрафуй их за отсутствие BKB!",
-    "2. Штрафуй за поздний BKB (35-40+ мин) или отсутствие BKB только тех бьющих коров (Kez, PA, Sven, Ursa, Troll, SF, TA и др.), которым BKB обязателен по мете против пика с контролем.",
-    "3. Отличай пустой нетворс (например бесполезная Linken Sphere против AoE-контроля и сбивалок) от хорошей мета-сборки.",
+    "Ты — профессиональный аналитик Dota 2 (7.41+, уровень 9000+ MMR). Оцени сборку предметов игрока на основе JSON со статистикой, инвентарем, пиком врага и анализом дерева угроз (target_threat_resolution).",
+    "ЖЕСТКИЕ ПРАВИЛА КОНТЕКСТНОГО АНАЛИЗА ДОТЫ:",
+    "1. Встроенный иммунитет и сейв: Герои с Rage/Blade Fury/Dark Pact/Doppelganger/Time Lapse/Phase Shift/Sleight of Fist/Borrowed Time НЕ обязаны покупать BKB, если у них собраны слоты на диспел/сейв по мете (Manta, Satanic, Disperser, Lotus, S&Y, Aghanim). Никогда не штрафуй их за отсутствие BKB!",
+    "2. Ценность слота (Slot Efficiency) и Перекрытие угроз: Никогда не требуй покупки MKB только из-за того, что у врага есть одиночный Radiance (например на Necrophos, WK, Alchemist). Radiance дает всего 25% уворотов самому носителю. Если против Necrophos с Radiance у керри (например Juggernaut) уже куплен Nullifier — главная угроза (Ghost Shroud) полностью снята, и Некр умирает за Nullifier + Omnislash без всякого MKB. Тратить 4700 золота и слот на MKB ради одного Радика — это ошибка экономики!",
+    "3. Ослепления vs Уклонение: Ослепления от Tinker (Laser), KotL (Blinding Light), Troll (Axes) или тучка Riki контрятся диспелом (Manta, BKB, Blade Fury, Satanic, Lotus) или выходом из зоны (Force Staff), а НЕ покупкой MKB. Требуй MKB/Bloodthorn только против реального тяжелого уворота (Phantom Assassin, Butterfly на вражеском коре, Arc Warden, Windranger без Nullifier).",
+    "4. Отличай пустой нетворс (например бесполезная Linken Sphere против AoE-контроля и сбивалок) от сильной мета-сборки.",
     'Верни строго JSON без markdown-обертки: {"verdictStatus": "good"|"warning"|"hidden_ruin"|"empty_networth", "headline": "короткий заголовок на русском", "explanation": "объяснение в 1-2 предложениях на русском", "economyPenalty": число от 0 до 25}.'
   ].join("\n");
 
@@ -1479,6 +1486,7 @@ function auditInventory(player, mainItems, roleInfo, durationMin, netWorth, purc
       slug: meta ? meta.slug : null,
       img: meta ? meta.img : null,
       cost: meta ? meta.cost : 1500,
+      boots: meta ? Boolean(meta.boots) : false,
       major: meta ? Boolean(meta.major) : id >= 100,
       boughtAtSec,
       boughtAt,
@@ -1490,6 +1498,36 @@ function auditInventory(player, mainItems, roleInfo, durationMin, netWorth, purc
 
   const hasBkbInInventory = mainItems.includes(116);
   const majorItemsCount = richItems.filter(i => i.major).length;
+  const bootsItems = richItems.filter(i => i.boots);
+  const cheapFillerItems = richItems.filter(i => !i.boots && !i.major && (i.cost || 0) <= 1400);
+
+  // Подсчет дубликатов одинаковых предметов (например 3 Bracer / 2 сапога / 4 ветки / 2 MoM)
+  const itemCountsById = {};
+  for (const id of mainItems) {
+    itemCountsById[id] = (itemCountsById[id] || 0) + 1;
+  }
+  const maxDuplicateSameItem = Math.max(0, ...Object.values(itemCountsById));
+
+  // Детектор абсурдного закупа / троллинга сборкой на кор-ролях (Pos 1–3)
+  const hasMultipleBoots = bootsItems.length >= 2;
+  const hasTrashSpamAtHighNw =
+    !roleInfo.isSupport &&
+    durationMin >= 20 &&
+    netWorth >= 13500 &&
+    ((majorItemsCount === 0 && mainItems.length >= 3) ||
+     (majorItemsCount <= 1 && (cheapFillerItems.length >= 3 || maxDuplicateSameItem >= 3)));
+
+  const isTrollOrAbsurdBuild = !roleInfo.isSupport && durationMin >= 18 && (
+    (hasMultipleBoots && netWorth >= 10000) ||
+    hasTrashSpamAtHighNw
+  );
+
+  let trollBuildReason = null;
+  if (hasMultipleBoots && !roleInfo.isSupport && netWorth >= 10000) {
+    trollBuildReason = `Несколько ботинок в инвентаре (${bootsItems.map(b => b.name).join(', ')}) при нетворсе ${netWorth.toLocaleString('ru-RU')} 🪙`;
+  } else if (hasTrashSpamAtHighNw) {
+    trollBuildReason = `При нетворсе ${netWorth.toLocaleString('ru-RU')} 🪙 инвентарь забит дешевыми аксессуарами/дубликатами (${richItems.map(i => i.name).join(', ')}) почти без кор-артефактов`;
+  }
 
   const expectedNwPerMinByPos = {
     1: 430,
@@ -1503,28 +1541,23 @@ function auditInventory(player, mainItems, roleInfo, durationMin, netWorth, purc
 
   const isSeverelyUndergeared =
     !roleInfo.isSupport &&
-    durationMin >= 25 &&
-    nwDeficitPct >= 25 &&
-    majorItemsCount <= 2;
+    durationMin >= 22 &&
+    ((nwDeficitPct >= 25 && majorItemsCount <= 2) || (nwDeficitPct >= 28 && (player.deaths || 0) >= 11));
 
   return {
     richItems,
     hasBkbInInventory,
     majorItemsCount,
+    bootsCount: bootsItems.length,
+    cheapFillerCount: cheapFillerItems.length,
+    isTrollOrAbsurdBuild,
+    trollBuildReason,
     expectedNw,
     nwDeficitPct,
     isSeverelyUndergeared
   };
 }
 
-/**
- * Умный «Оценщик билда и таймингов предметов против пика врага» (v4.3)
- * Различает:
- * 1) Скрытый руин / Недоигровку билдом (например, Kez покупает BKB только на 40-й минуте против Lion + Invoker + Meepo + BH,
- *    собирая до этого стеклянную пушку, или вообще игнорирует BKB против кучи контроля).
- * 2) Пустой нетворс / Деньги на ветер (например, покупка Linken's Sphere за 4800 золота против AoE-контроля или дешевых сбивалок Track/Haze).
- * 3) Классические опоздания по таймингам ключевых слотов (Battle Fury, Blink, Radiance, Manta, Harpoon).
- */
 // Вспомогательная функция: собирает все предметы игрока (6 слотов + ранец + нейтралка + съеденный Аганим/Шард/Муншард)
 function getPlayerAllItemIds(p) {
   if (!p) return [];
@@ -1539,54 +1572,203 @@ function getPlayerAllItemIds(p) {
   return [...new Set(raw)];
 }
 
-// Герои с пуржащимися встроенными сейвами от физ-урона (Ghost Shroud, Decrepify, Windrun, Guardian Angel, Surge)
-const PURGEABLE_INNATE_SAVE_HEROES = {
-  36: "Necrophos (Ghost Shroud)",
-  45: "Pugna (Decrepify)",
-  57: "Omniknight (Guardian Angel)",
-  21: "Windranger (Windrun)",
-  55: "Dark Seer (Surge)"
-};
-
-// Герои, которым критически нужен Nullifier против Eul's / Ghost Scepter / Glimmer / Force / Aeon Disk
-const NULLIFIER_CARRIER_HERO_IDS = new Set([
-  1, 4, 8, 11, 18, 21, 32, 41, 42, 44, 46, 54, 56, 60, 63, 67, 70, 73, 81, 93, 95, 104, 114, 136, 145
+// ============================================================================
+// АРХИТЕКТУРА 6 ТОЧНЫХ БОЕВЫХ АРХЕТИПОВ + ДИНАМИЧЕСКИЕ ГИБРИДЫ (v6.0)
+// ============================================================================
+const MID_RIGHTCLICKER_HERO_IDS = new Set([
+  10, // Morphling
+  11, // Shadow Fiend
+  21, // Windranger
+  25, // Lina
+  35, // Sniper
+  46, // Templar Assassin
+  59, // Huskar
+  76, // Outworld Destroyer
+  113, // Arc Warden
+  138  // Muerta
 ]);
 
-// Герои со встроенным уклонением или ослеплением (промахами), против которых райткликерам нужен MKB / Bloodthorn
-const HIGH_INNATE_EVASION_HEROES = {
-  44: "Phantom Assassin (Blur 50%)",
-  21: "Windranger (Windrun 100%)",
-  113: "Arc Warden (Magnetic Field 100%)",
-  78: "Brewmaster (Drunken Brawler)"
-};
-
-const BLIND_OR_MISS_HEROES = {
-  32: "Riki (Smoke Screen)",
-  95: "Troll Warlord (Whirling Axes)",
-  123: "Hoodwink (Scurry)",
-  61: "Broodmother (Incapacitating Bite)",
-  90: "Keeper of the Light (Blinding Light)",
-  34: "Tinker (Laser)"
-};
-
-// Чистые физические райткликеры (плюс гибридные герои определяются динамически по их слотам)
-const PHYSICAL_RIGHT_CLICK_HERO_IDS = new Set([
-  1, 4, 6, 8, 10, 11, 12, 15, 18, 21, 28, 32, 35, 41, 42, 44, 46, 47, 48, 49, 53, 54,
-  56, 59, 60, 61, 63, 67, 70, 72, 73, 77, 80, 81, 82, 89, 93, 94, 95, 104, 109, 113, 114, 135, 136, 138, 145
+const MID_SPELLCASTER_HERO_IDS = new Set([
+  13,  // Puck
+  17,  // Storm Spirit
+  22,  // Zeus
+  34,  // Tinker
+  36,  // Necrophos
+  39,  // Queen of Pain
+  43,  // Death Prophet
+  52,  // Leshrac
+  65,  // Batrider
+  74,  // Invoker (по базе кастер, переходит в райткликера только при покупке физ-ДПС слотов)
+  86,  // Rubick
+  101, // Skywrath Mage
+  106, // Ember Spirit
+  107, // Earth Spirit
+  120, // Pangolier
+  126, // Void Spirit
+  137  // Primal Beast
 ]);
 
-// Предметы физического райтклика (чтобы отличить физ-SF / физ-Lina / физ-NP от чистого мага)
+// Строгий список гибридных героев, которые могут собираться И в физ-урон с руки, И в маг-прокаст/кд заклинаний
+// (Чистые керри вроде Anti-Mage сюда НЕ входят во избежание ложных срабатываний)
+const HYBRID_FLEX_DAMAGE_HERO_IDS = new Set([
+  9,   // Mirana
+  10,  // Morphling
+  11,  // Shadow Fiend
+  15,  // Razor
+  21,  // Windranger
+  25,  // Lina
+  39,  // Queen of Pain
+  47,  // Viper
+  53,  // Nature's Prophet
+  74,  // Invoker
+  102, // Abaddon
+  113, // Arc Warden
+  123, // Hoodwink
+  126, // Void Spirit
+  138  // Muerta
+]);
+
+// Предметы, однозначно определяющие сборку гибридного героя в Мага-кастера (Spellcaster)
+const SPELLCASTER_BUILD_ITEM_IDS = new Set([
+  108,  // Aghanim's Scepter
+  110,  // Refresher Orb
+  119,  // Shiva's Guard
+  121,  // Bloodstone
+  176,  // Ethereal Blade
+  201,  // Dagon 2
+  202,  // Dagon 3
+  203,  // Dagon 4
+  204,  // Dagon 5
+  223,  // Meteor Hammer
+  232,  // Aether Lens
+  235,  // Octarine Core
+  259,  // Kaya and Sange
+  273,  // Kaya
+  277,  // Yasha and Kaya
+  604,  // Arcane Blink
+  610,  // Wind Waker
+  692,  // Eternal Shroud
+  1100  // Phylactery
+]);
+
+// Предметы чистого физического ДПС с руки (без учета нейтральных утилити-слотов вроде Blink, BKB, Midas, Boots of Travel)
+const TRUE_PHYSICAL_DPS_ITEM_IDS = new Set([
+  135,  // Monkey King Bar
+  139,  // Butterfly
+  141,  // Daedalus
+  145,  // Battle Fury
+  147,  // Manta Style
+  149,  // Crystalys
+  151,  // Armlet of Mordiggian
+  154,  // Sange and Yasha
+  156,  // Satanic
+  158,  // Mjollnir
+  160,  // Eye of Skadi
+  166,  // Maelstrom
+  168,  // Desolator
+  172,  // Mask of Madness
+  174,  // Diffusal Blade
+  208,  // Abyssal Blade
+  225,  // Nullifier
+  236,  // Dragon Lance
+  249,  // Silver Edge
+  250,  // Bloodthorn
+  252,  // Echo Sabre
+  534,  // Witch Blade
+  597,  // Parasma
+  603,  // Swift Blink
+  939,  // Harpoon
+  1097, // Disperser
+  1164, // Parasma
+  1806  // Parasma
+]);
+
+const OFFLANE_DUELIST_HERO_IDS = new Set([
+  4,   // Bloodseeker
+  15,  // Razor
+  28,  // Slardar
+  38,  // Beastmaster
+  47,  // Viper
+  60,  // Night Stalker
+  77,  // Lycan
+  104, // Legion Commander
+  136  // Marci
+]);
+
+const OFFLANE_TANK_INITIATOR_HERO_IDS = new Set([
+  2,   // Axe
+  7,   // Earthshaker
+  16,  // Sand King
+  19,  // Tiny
+  23,  // Kunkka
+  29,  // Tidehunter
+  49,  // Dragon Knight
+  51,  // Clockwerk
+  55,  // Dark Seer
+  69,  // Doom
+  71,  // Spirit Breaker
+  78,  // Brewmaster
+  83,  // Treant Protector
+  85,  // Undying
+  96,  // Centaur Warrunner
+  97,  // Magnus
+  98,  // Timbersaw
+  99,  // Bristleback
+  103, // Elder Titan
+  108, // Underlord
+  110, // Phoenix
+  129, // Mars
+  135, // Dawnbreaker
+  146  // Largo
+]);
+
 const RIGHT_CLICK_ITEM_INDICATORS = new Set([
   63, 172, 236, 263, 147, 154, 168, 149, 141, 139, 156, 249, 152, 135, 250, 225,
   603, 112, 145, 158, 166, 160, 939, 252, 151, 208, 143, 174, 1097, 596
 ]);
 
-// Герои с критическими пассивками, требующими Break (Silver Edge)
+// Пул героев, которые по мете собирают Monkey King Bar / Bloodthorn для физ-урона с руки
+const META_MKB_CARRIER_HERO_IDS = new Set([
+  1, 4, 6, 8, 9, 10, 11, 15, 18, 21, 25, 35, 41, 42, 44, 46, 47, 48, 49,
+  53, 54, 56, 59, 61, 63, 70, 72, 73, 74, 76, 93, 94, 95, 104, 109, 113, 114, 136, 138, 145
+]);
+
+// Пул физ-коров и охотников, которые по мете обязаны собирать Nullifier против сейвов врага (включая Clinkz #56, PA #44, Jugg #8, Slark #93, Ursa #70 и др.)
+const META_NULLIFIER_CARRIER_HERO_IDS = new Set([
+  1, 4, 8, 11, 12, 18, 19, 21, 28, 32, 41, 42, 44, 46, 53, 54, 56, 60, 61,
+  63, 67, 70, 73, 81, 93, 95, 104, 113, 114, 136, 145
+]);
+
+const PURGEABLE_INNATE_SAVE_HEROES = {
+  36: "Necrophos (Ghost Shroud)",
+  45: "Pugna (Decrepify)",
+  57: "Omniknight (Guardian Angel)",
+  21: "Windranger (Windrun)"
+};
+
+const OFFENSIVE_EULS_INITIATOR_HERO_IDS = new Set([
+  2, 7, 16, 23, 64, 71, 96, 97, 103, 129, 137
+]);
+
+const HIGH_INNATE_EVASION_HEROES = {
+  44: { label: "Phantom Assassin (Blur 50%)", weight: 1.15, dispellableByNullifier: false },
+  21: { label: "Windranger (Windrun 100%)", weight: 0.90, dispellableByNullifier: true },
+  113: { label: "Arc Warden (Magnetic Field 100%)", weight: 0.85, dispellableByNullifier: false },
+  78: { label: "Brewmaster (Drunken Brawler)", weight: 0.70, dispellableByNullifier: false }
+};
+
+const BLIND_OR_MISS_HEROES = {
+  32: { label: "Riki (Smoke Screen)", weight: 0.15, counteredByDispel: false, counteredByForceOrBkb: true },
+  95: { label: "Troll Warlord (Whirling Axes)", weight: 0.20, counteredByDispel: true },
+  123: { label: "Hoodwink (Scurry)", weight: 0.25, counteredByDispel: false },
+  61: { label: "Broodmother (Incapacitating Bite)", weight: 0.20, counteredByDispel: true },
+  90: { label: "Keeper of the Light (Blinding Light)", weight: 0.15, counteredByDispel: true },
+  34: { label: "Tinker (Laser)", weight: 0.20, counteredByDispel: true }
+};
+
 const CRITICAL_PASSIVE_BOSS_HEROES = {
   99: "Bristleback (Bristleback)",
   67: "Spectre (Dispersion)",
-  59: "Huskar (Berserker's Blood)",
   98: "Timbersaw (Reactive Armor)"
 };
 
@@ -1595,16 +1777,13 @@ const SECONDARY_PASSIVE_HEROES = {
   29: "Tidehunter (Kraken Shell)",
   102: "Abaddon (Curse of Avernus)",
   49: "Dragon Knight (Dragon Blood)",
-  108: "Underlord (Atrophy Aura)",
-  129: "Mars (Bulwark)",
-  58: "Enchantress (Untouchable)"
+  108: "Underlord (Atrophy Aura)"
 };
 
 const SILVER_EDGE_CARRIER_HERO_IDS = new Set([
-  4, 6, 11, 18, 19, 23, 25, 28, 35, 42, 46, 47, 49, 53, 54, 56, 63, 70, 73, 81, 93, 95, 104, 113, 114, 138, 145
+  4, 6, 11, 18, 19, 23, 25, 28, 35, 42, 46, 47, 49, 53, 54, 56, 63, 73, 81, 93, 95, 104, 113, 114, 138, 145
 ]);
 
-// Герои с экстремальным сустейном/хилом/перекачкой, требующие Skadi / Shiva / Spirit Vessel
 const HEAVY_SUSTAIN_HEROES = {
   59: "Huskar",
   73: "Alchemist",
@@ -1615,6 +1794,7 @@ const HEAVY_SUSTAIN_HEROES = {
   98: "Timbersaw",
   54: "Lifestealer",
   93: "Slark",
+  96: "Centaur Warrunner",
   14: "Pudge",
   102: "Abaddon",
   52: "Leshrac",
@@ -1623,7 +1803,6 @@ const HEAVY_SUSTAIN_HEROES = {
   114: "Monkey King"
 };
 
-// Иллюзионисты и саммонеры, требующие AoE-зачистки (Mjollnir / Battle Fury / Radiance / Gleipnir / Shiva)
 const ILLUSION_OR_SWARM_HEROES = {
   12: "Phantom Lancer",
   89: "Naga Siren",
@@ -1633,137 +1812,407 @@ const ILLUSION_OR_SWARM_HEROES = {
   109: "Terrorblade"
 };
 
-// Герои со встроенной мощной AoE-зачисткой, которым не обязательно покупать отдельный слот против иллюзий
 const INNATE_AOE_CLEAR_HERO_IDS = new Set([
   2, 7, 16, 18, 22, 23, 25, 29, 36, 48, 52, 55, 64, 72, 74, 87, 94, 96, 97, 98, 106, 108, 110, 120, 128, 129, 135, 137
 ]);
 
-// Дальнобойные кайт-герои и милишные коры без встроенного длинного прыжка
-const RANGED_KITE_HERO_IDS = new Set([6, 21, 34, 35, 40, 47, 53, 63, 64, 90, 101, 113, 123, 138]);
-const KITEABLE_MELEE_CORE_HERO_IDS = new Set([2, 18, 19, 23, 28, 42, 49, 54, 60, 69, 70, 73, 81, 95, 96, 104, 129]);
-
-// Неуловимые мобильные герои, против которых нужен мгновенный хекс/сайленс/баш
-const ELUSIVE_SPIRIT_HEROES = {
-  17: "Storm Spirit",
-  106: "Ember Spirit",
-  126: "Void Spirit",
-  13: "Puck",
-  63: "Weaver",
-  1: "Anti-Mage",
-  39: "Queen of Pain"
-};
-
-// Герои с тяжелым магическим прокастом (для проверки Pipe / Eternal Shroud / Mage Slayer / BKB)
 const HEAVY_MAGIC_BURST_HERO_IDS = new Set([
   7, 13, 16, 17, 22, 25, 26, 30, 31, 34, 36, 39, 40, 43, 45, 52, 64, 68, 74, 76, 84, 86, 87, 88, 98, 101, 105, 106, 110, 119, 121, 126, 128, 137, 138
 ]);
 
-// Жадные кор-слоты, которые не должен собирать саппорт 4/5 позиции при полном отсутствии сейв-предметов
 const GREEDY_SUPPORT_CARRY_ITEM_IDS = new Set([
   65, 135, 137, 139, 141, 145, 147, 151, 152, 156, 158, 160, 166, 168, 201, 202, 203, 204, 247, 249, 250, 1107
 ]);
 
-// Определение боевого архетипа игрока по герою, позиции и собранным предметам
-function detectPlayerBuildArchetype(player, roleInfo, allItemIds) {
+/**
+ * Пункт 1: Динамическое определение архетипа (с проверкой текущего закупа для гибридных героев: Invoker, SF, Lina, WR, NP и др.)
+ */
+function detectPlayerBuildArchetype(player, roleInfo, allItemIds = []) {
   const hId = Number(player.hero_id);
-  const hasRightClickItem = allItemIds.some(id => RIGHT_CLICK_ITEM_INDICATORS.has(id));
-  const hasPureMagicCombo =
-    (allItemIds.includes(100) || allItemIds.includes(610)) &&
-    (allItemIds.includes(1) || allItemIds.includes(604)) &&
-    !hasRightClickItem;
-
-  // Например, на Shadow Fiend (#11), Lina (#25), NP (#53), WR (#21), Abaddon (#102):
-  // если игрок на Pos 1 или купил хотя бы один физ-слот (Pike, Treads, MoM, Manta, Daedalus, Desolator, Butterfly, Satanic, Silver Edge)
-  // и не играет через чистый Euls+ArcaneBlink без тычки — это физический райткликер!
-  const isPhysicalRightClicker =
-    !roleInfo.isSupport &&
-    ((PHYSICAL_RIGHT_CLICK_HERO_IDS.has(hId) && !hasPureMagicCombo) || hasRightClickItem);
-
+  const pos = Number(roleInfo.position || 5);
   const isRanged = RANGED_HERO_IDS.has(hId);
 
-  let archetypeLabel = "Универсальная сборка";
-  if (roleInfo.isJungler) {
-    archetypeLabel = "Лесной фармер (Pos 6 🌲)";
-  } else if (roleInfo.isSupport) {
-    const saveCount = allItemIds.filter(id => SUPPORT_UTILITY_ITEM_IDS.has(id) || id === 226 || id === 100).length;
-    archetypeLabel = saveCount >= 2 ? "Командный сейв-саппорт" : saveCount === 1 ? "Саппорт-инициатор" : "Жадная сборка саппорта";
-  } else if (isPhysicalRightClicker) {
-    archetypeLabel = isRanged ? "Дальнобойный физ-райткликер" : "Ближний физ-кор / Страйкер";
-  } else if (roleInfo.isSpellcaster || hasPureMagicCombo) {
-    archetypeLabel = "Магический прокастер / Темповик";
-  } else if (roleInfo.position === 3) {
-    archetypeLabel = "Фронтлейнер / Инициатор (Pos 3)";
+  const spellcasterItemsCount = allItemIds.filter(id => SPELLCASTER_BUILD_ITEM_IDS.has(id)).length;
+  const physicalDpsItemsCount = allItemIds.filter(id => TRUE_PHYSICAL_DPS_ITEM_IDS.has(id)).length;
+  const isHybridHero = HYBRID_FLEX_DAMAGE_HERO_IDS.has(hId);
+
+  // Для гибридных героев (Invoker, SF, Lina, WR и др.): если собраны Octarine Core, Meteor Hammer, Aghanim's Scepter, Kaya, Refresher, Shiva's Guard
+  // и нет перевеса в физические ДПС-слоты — классифицируем строго как Мага-кастера (MID_SPELLCASTER)!
+  const hybridBuiltAsSpellcaster =
+    isHybridHero &&
+    ((spellcasterItemsCount >= 1 && physicalDpsItemsCount === 0) ||
+     (spellcasterItemsCount >= 2 && spellcasterItemsCount >= physicalDpsItemsCount));
+
+  const hybridBuiltAsRightClicker =
+    isHybridHero &&
+    physicalDpsItemsCount >= 1 &&
+    physicalDpsItemsCount > spellcasterItemsCount;
+
+  if (pos === 4 || pos === 5 || roleInfo.isSupport) {
+    return {
+      archetypeKey: "SUPPORT_UTILITY",
+      archetypeLabel: "Саппорт / Утилити",
+      isPhysicalRightClicker: false,
+      hasPureMagicCombo: false,
+      isRanged
+    };
+  }
+
+  if (pos === 6 || roleInfo.isJungler) {
+    return {
+      archetypeKey: "OFFLANE_TANK_INITIATOR",
+      archetypeLabel: "Лесной фармер (Pos 6 🌲)",
+      isPhysicalRightClicker: false,
+      hasPureMagicCombo: false,
+      isRanged
+    };
+  }
+
+  // На 1-й позиции (Pos 1): чистые керри всегда CARRY_STRIKER, а гибриды (например SF/Lina/NP) проверяются по закупу
+  if (pos === 1) {
+    if (hybridBuiltAsSpellcaster || (MID_SPELLCASTER_HERO_IDS.has(hId) && physicalDpsItemsCount === 0)) {
+      return {
+        archetypeKey: "MID_SPELLCASTER",
+        archetypeLabel: "Маг-темповик / Кастер",
+        isPhysicalRightClicker: false,
+        hasPureMagicCombo: true,
+        isRanged
+      };
+    }
+    return {
+      archetypeKey: "CARRY_STRIKER",
+      archetypeLabel: "Физ-керри / Страйкер (Pos 1)",
+      isPhysicalRightClicker: true,
+      hasPureMagicCombo: false,
+      isRanged
+    };
+  }
+
+  // На 2-й позиции (Pos 2 — Мидер):
+  if (pos === 2) {
+    if (hybridBuiltAsSpellcaster) {
+      return {
+        archetypeKey: "MID_SPELLCASTER",
+        archetypeLabel: "Маг-темповик / Кастер",
+        isPhysicalRightClicker: false,
+        hasPureMagicCombo: true,
+        isRanged
+      };
+    }
+    if (hybridBuiltAsRightClicker) {
+      return {
+        archetypeKey: "MID_RIGHTCLICKER",
+        archetypeLabel: "ДПС-Мидер / Стрелок (Pos 2)",
+        isPhysicalRightClicker: true,
+        hasPureMagicCombo: false,
+        isRanged
+      };
+    }
+    if (MID_SPELLCASTER_HERO_IDS.has(hId)) {
+      return {
+        archetypeKey: "MID_SPELLCASTER",
+        archetypeLabel: "Маг-темповик / Кастер",
+        isPhysicalRightClicker: false,
+        hasPureMagicCombo: true,
+        isRanged
+      };
+    }
+    if (OFFLANE_TANK_INITIATOR_HERO_IDS.has(hId) && !MID_RIGHTCLICKER_HERO_IDS.has(hId)) {
+      return {
+        archetypeKey: "OFFLANE_TANK_INITIATOR",
+        archetypeLabel: "Танк / Инициатор (Pos 3)",
+        isPhysicalRightClicker: false,
+        hasPureMagicCombo: false,
+        isRanged
+      };
+    }
+    if (MID_RIGHTCLICKER_HERO_IDS.has(hId) || PURE_POS1_CARRY_HERO_IDS.has(hId) || physicalDpsItemsCount >= 2) {
+      return {
+        archetypeKey: "MID_RIGHTCLICKER",
+        archetypeLabel: "ДПС-Мидер / Стрелок (Pos 2)",
+        isPhysicalRightClicker: true,
+        hasPureMagicCombo: false,
+        isRanged
+      };
+    }
+    return {
+      archetypeKey: "MID_SPELLCASTER",
+      archetypeLabel: "Маг-темповик / Кастер",
+      isPhysicalRightClicker: false,
+      hasPureMagicCombo: true,
+      isRanged
+    };
+  }
+
+  // На 3-й позиции (Pos 3 — Оффлейнер):
+  if (hybridBuiltAsSpellcaster) {
+    return {
+      archetypeKey: "MID_SPELLCASTER",
+      archetypeLabel: "Маг-темповик / Кастер",
+      isPhysicalRightClicker: false,
+      hasPureMagicCombo: true,
+      isRanged
+    };
+  }
+
+  if (OFFLANE_DUELIST_HERO_IDS.has(hId) || hybridBuiltAsRightClicker) {
+    return {
+      archetypeKey: "OFFLANE_DUELIST",
+      archetypeLabel: "Оффлейн-дуэлянт / Охотник (Pos 3)",
+      isPhysicalRightClicker: true,
+      hasPureMagicCombo: false,
+      isRanged
+    };
+  }
+
+  if (MID_SPELLCASTER_HERO_IDS.has(hId) && !OFFLANE_TANK_INITIATOR_HERO_IDS.has(hId)) {
+    return {
+      archetypeKey: "MID_SPELLCASTER",
+      archetypeLabel: "Маг-темповик / Кастер",
+      isPhysicalRightClicker: false,
+      hasPureMagicCombo: true,
+      isRanged
+    };
   }
 
   return {
-    isPhysicalRightClicker,
-    hasPureMagicCombo,
-    isRanged,
-    archetypeLabel
+    archetypeKey: "OFFLANE_TANK_INITIATOR",
+    archetypeLabel: "Танк / Инициатор (Pos 3)",
+    isPhysicalRightClicker: false,
+    hasPureMagicCombo: false,
+    isRanged
+  };
+}
+
+function analyzeEnemyTargetThreats({
+  player,
+  roleInfo,
+  buildArch,
+  allPlayerItems,
+  purchaseLog,
+  enemyPlayers,
+  durationSec,
+  findEnemyItemTimeSec,
+  isBoughtRightBeforeMatchEnd
+}) {
+  const hasItem = (id) => allPlayerItems.includes(id);
+  const hasAnyItem = (ids) => ids.some(id => hasItem(id));
+
+  const hasNullifier = hasItem(225);
+  const hasTrueStrike = hasAnyItem([135, 250, 911]);
+  const hasMjollnirOrGleipnir = hasAnyItem([158, 1466]);
+  const hasHexOrAbyssal = hasAnyItem([96, 208]);
+  const hasSelfDispelItem = hasAnyItem([147, 116, 156, 226, 1097, 610]);
+  const hasInnateSpellImmunityOrDispel = INNATE_SPELL_IMMUNITY_OR_ELUSIVE_HERO_IDS.has(Number(player.hero_id));
+  const canDispelBlinds = hasSelfDispelItem || hasInnateSpellImmunityOrDispel;
+  const hasForceOrPike = hasAnyItem([102, 263]);
+
+  let totalUnresolvedEvasionWeight = 0;
+  const unresolvedLabels = [];
+  const resolvedNotes = [];
+  const allDetectedEvasionLabels = [];
+  const activeButterflyHolders = [];
+  const activeRadianceHolders = [];
+
+  for (const ep of (enemyPlayers || [])) {
+    const hId = Number(ep.hero_id);
+    const hName = (HEROES_DB[hId] && HEROES_DB[hId].name) || ep.hero_name || `Hero #${hId}`;
+    const epItems = getPlayerAllItemIds(ep);
+    const epHas = (id) => epItems.includes(id);
+
+    const hasInnatePurgeableSave = Boolean(PURGEABLE_INNATE_SAVE_HEROES[hId]);
+    const hasGhostOrEuls = epHas(37) || epHas(176) || epHas(100) || epHas(610);
+    const targetReliesOnPurgeableSave = hasInnatePurgeableSave || hasGhostOrEuls;
+
+    if (epHas(139)) {
+      const tSec = findEnemyItemTimeSec(ep, [139]);
+      if (!isBoughtRightBeforeMatchEnd(tSec)) {
+        const lbl = `${hName} (Butterfly${tSec ? ` ${formatClock(tSec)}` : ""})`;
+        activeButterflyHolders.push({ heroId: hId, heroName: hName, timeSec: tSec, label: lbl });
+        allDetectedEvasionLabels.push(lbl);
+        totalUnresolvedEvasionWeight += 1.05;
+        unresolvedLabels.push(lbl);
+      }
+    }
+
+    if (epHas(137)) {
+      const tSec = findEnemyItemTimeSec(ep, [137]);
+      if (!isBoughtRightBeforeMatchEnd(tSec)) {
+        const lbl = `${hName} (Radiance${tSec ? ` ${formatClock(tSec)}` : ""})`;
+        activeRadianceHolders.push({ heroId: hId, heroName: hName, timeSec: tSec, label: lbl });
+        allDetectedEvasionLabels.push(lbl);
+
+        if (targetReliesOnPurgeableSave && hasNullifier) {
+          resolvedNotes.push(
+            `Против ${hName} (Radiance) уже собран Nullifier — снимает ${PURGEABLE_INNATE_SAVE_HEROES[hId] || "сейв/гост"}, цель умирает за фокус без необходимости тратить 4700 🪙 и слот на MKB ради 25% миссов Радика`
+          );
+        } else if (hasMjollnirOrGleipnir && (hasNullifier || hasHexOrAbyssal || Number(player.hero_id) === 8)) {
+          resolvedNotes.push(
+            `25% миссов от Radiance на ${hName} перекрываются высокой скоростью атаки, молниями Mjollnir/Gleipnir и контролем — отдельный слот MKB нецелесообразен`
+          );
+        } else {
+          totalUnresolvedEvasionWeight += 0.30;
+          unresolvedLabels.push(lbl);
+        }
+      }
+    }
+
+    if (HIGH_INNATE_EVASION_HEROES[hId]) {
+      const evMeta = HIGH_INNATE_EVASION_HEROES[hId];
+      allDetectedEvasionLabels.push(evMeta.label);
+
+      if (evMeta.dispellableByNullifier && hasNullifier) {
+        resolvedNotes.push(
+          `Против ${evMeta.label} уже куплен Nullifier, который снимает Windrun — покупка MKB не обязательна`
+        );
+      } else {
+        totalUnresolvedEvasionWeight += evMeta.weight;
+        unresolvedLabels.push(evMeta.label);
+      }
+    }
+
+    if (BLIND_OR_MISS_HEROES[hId]) {
+      const blindMeta = BLIND_OR_MISS_HEROES[hId];
+      allDetectedEvasionLabels.push(blindMeta.label);
+
+      if (blindMeta.counteredByDispel && canDispelBlinds) {
+        resolvedNotes.push(
+          `Ослепление от ${blindMeta.label} снимается ${hasInnateSpellImmunityOrDispel ? "встроенной механикой героя (Blade Fury / Rage / Dark Pact)" : "предметами диспела (Manta / BKB / Satanic / Lotus)"}`
+        );
+      } else if (blindMeta.counteredByForceOrBkb && (hasItem(116) || hasForceOrPike || hasInnateSpellImmunityOrDispel)) {
+        resolvedNotes.push(
+          `Против ${blindMeta.label} работают BKB / Force Staff / встроенный иммунитет, а не MKB`
+        );
+      } else {
+        totalUnresolvedEvasionWeight += blindMeta.weight;
+        unresolvedLabels.push(blindMeta.label);
+      }
+    }
+  }
+
+  const majorSlotsOwned = allPlayerItems.filter(id => ITEMS_DB[id] && (ITEMS_DB[id].major || ITEMS_DB[id].boots)).length;
+  const isSlotConstrainedWithHighValueItems =
+    majorSlotsOwned >= 5 && (hasNullifier || hasHexOrAbyssal || hasMjollnirOrGleipnir);
+
+  if (totalUnresolvedEvasionWeight > 0 && totalUnresolvedEvasionWeight < 0.85 && isSlotConstrainedWithHighValueItems) {
+    resolvedNotes.push(
+      `Защита ценности слота (Slot Efficiency): при мелких источниках миссов (${unresolvedLabels.join(", ")}) слоты грамотно отданы под приоритетные задачи (${hasNullifier ? "Nullifier, " : ""}мобильность и выживаемость)`
+    );
+  }
+
+  const mkbStrictlyRequired = totalUnresolvedEvasionWeight >= 0.85;
+
+  return {
+    totalUnresolvedEvasionWeight: Number(totalUnresolvedEvasionWeight.toFixed(2)),
+    mkbStrictlyRequired,
+    hasAnyEvasionOnMap: allDetectedEvasionLabels.length > 0,
+    allDetectedEvasionLabels,
+    unresolvedLabels,
+    resolvedNotes,
+    activeButterflyHolders,
+    activeRadianceHolders,
+    hasTrueStrike,
+    hasNullifier,
+    hasMjollnirOrGleipnir
   };
 }
 
 /**
- * Умный «Мини-ИИ Оценщик Билда и Контр-сборки против всего пика и слотов врага» (v5.6)
- * Работает на 100% как в распарсенных матчах (с таймингами purchase_log), так и в нераспарсенных матчах (по всем 10 героям и 60+ слотам инвентаря/ранца/нейтралок):
- * 1) Анти-сейв / Пурж (Nullifier #225 против Eul's Scepter, Wind Waker, Ghost Scepter, Ethereal Blade, Glimmer Cape, Force Staff, Aeon Disk, Necrophos, Pugna).
- * 2) Анти-уклонение / True Strike (Monkey King Bar #135 / Bloodthorn #250 на SF и других райткликерах против Butterfly, Radiance, PA, WR, Arc Warden, Riki Smoke, Brewmaster).
- * 3) Иммунитет к контролю (BKB #116 с учетом встроенного иммунитета Lifestealer/Juggernaut/Slark/PL/Weaver/Puck/Storm/Ember + диспел-слотов).
- * 4) Отключение пассивок / Break (Silver Edge #249 против Bristleback, Spectre, Huskar, Timbersaw, PA, Tidehunter, Abaddon, DK).
- * 5) Анти-хил / Реген-резка (Eye of Skadi #160 / Shiva's Guard #119 / Spirit Vessel #267 против Huskar, Alchemist, Morphling, Necrophos, Io, Bristleback и вражеских Satanic / Heart / Bloodstone).
- * 6) Анти-иллюзии и AoE-зачистка (Mjollnir #158 / Battle Fury #145 / Radiance #137 / Gleipnir #1466 / Shiva #119 против PL, Naga, CK, Meepo, Broodmother, TB).
- * 7) Анти-кайт сближение для милишников (Blink / Harpoon / Abyssal / Silver Edge) и мгновенный локдаун спиритов (Hex / Bloodthorn / Orchid / Abyssal).
- * 8) Защита от направленных ультимейтов (Linken's Sphere #123 / Lotus Orb #226 против Doom, Duel, Fiend's Grip, Roar, Lasso) И детектор пустой Linken's Sphere против AoE-контроля.
- * 9) Командный маг-резист оффлейнера (Pipe #90 / Eternal Shroud #692 / Mage Slayer #598) и проверка саппортов на отказ от сейв-слотов ради кор-урона.
- * 10) Соответствие живой мете STRATZ API + OpenDota itemPopularity и детектор механических анти-синергий (Battle Fury / Harpoon на дальнике и др.).
+ * Умный «Мини-ИИ Оценщик Билда и Матрица Контр-Закупа» (v6.0)
+ * — С динамическими гибридами (Invoker/SF/Lina), привязкой MKB/Nullifier к пулу физ-коров (Clinkz, PA, Jugg, Slark, Ursa)
+ * — С проверкой Hex / Orchid / Bloodthorn / Shiva's Guard у кастеров (MID_SPELLCASTER)
+ * — С детектором троллинга сборкой на корах и жадного закупа без сейвов на саппортах
  */
 function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchaseLog, enemyPlayers, allPlayers, durationMin, netWorth, deaths, wonMatch) {
   const richItems = invAudit.richItems;
   const allPlayerItems = getPlayerAllItemIds(player);
   const hasItem = (id) => mainItems.includes(id) || allPlayerItems.includes(id);
+  const hasAnyItem = (ids) => ids.some(id => hasItem(id));
 
   const allyPlayers = (allPlayers || []).filter(ap => (ap.player_slot < 128) === (player.player_slot < 128));
   const teamAllItemIds = new Set();
   for (const ap of allyPlayers) {
     for (const id of getPlayerAllItemIds(ap)) teamAllItemIds.add(id);
   }
+  const teamHasAnyItem = (ids) => ids.some(id => teamAllItemIds.has(id));
 
   const buildArch = detectPlayerBuildArchetype(player, roleInfo, allPlayerItems);
+  const arch = buildArch.archetypeKey;
+
+  const teamHasAntiHeal =
+    teamHasAnyItem([267, 160, 569]) ||
+    allyPlayers.some(ap => [68, 69, 40].includes(Number(ap.hero_id)));
+
+  const teamHasNullifier =
+    teamHasAnyItem([225]) ||
+    allyPlayers.some(ap => Number(ap.hero_id) === 79);
+
+  const teamHasAuraSave =
+    teamHasAnyItem([90, 242, 79, 231, 931, 226]);
+
+  const teamHasBreak =
+    teamHasAnyItem([249]) ||
+    allyPlayers.some(ap =>
+      Number(ap.hero_id) === 47 ||
+      ([123, 79, 44].includes(Number(ap.hero_id)) && getPlayerAllItemIds(ap).includes(108))
+    );
+
+  const teamHasAoEClear =
+    teamHasAnyItem([158, 145, 137, 1466, 119, 166]) ||
+    allyPlayers.some(ap => INNATE_AOE_CLEAR_HERO_IDS.has(Number(ap.hero_id)));
+
   const metaProfile = getHeroMetaProfile(player.hero_id);
   const isInnateImmuneOrElusive = INNATE_SPELL_IMMUNITY_OR_ELUSIVE_HERO_IDS.has(player.hero_id);
   const metaDispelItemsOwned = richItems.filter(i => META_DISPEL_OR_SAVE_ITEM_IDS.has(i.id));
   const hasMetaDispelOrSave = metaDispelItemsOwned.length > 0 || allPlayerItems.some(id => META_DISPEL_OR_SAVE_ITEM_IDS.has(id));
   const isExemptByInnateAndMetaDispel = isInnateImmuneOrElusive && hasMetaDispelOrSave;
 
-  // Сканируем вражеский пик и все слоты врагов (работает на 100% даже без парсинга реплея!)
+  const kills = player.kills || 0;
+  const assists = player.assists || 0;
+  const durationSec = Math.round(durationMin * 60);
+  const kdaRatio = (kills + assists) / Math.max(1, deaths);
+  const playerGpm = player.gold_per_min || 0;
+  const playerDpg = (player.hero_damage || 0) / Math.max(1, player.total_gold || (playerGpm * durationMin) || netWorth || 1);
+
+  const isDominatingKillerCore = kills >= 12 && kills >= deaths + 4;
+  const isHighImpactWinnerOrCarry = Boolean(wonMatch) || (kdaRatio >= 2.4 && playerDpg >= 1.05) || isDominatingKillerCore;
+
+  // Привязка контр-предметов к реальному пулу героя по мете
+  const heroPoolSupportsMkb =
+    buildArch.isPhysicalRightClicker &&
+    (META_MKB_CARRIER_HERO_IDS.has(Number(player.hero_id)) || metaProfile.topMetaItemIds.includes(135) || arch === "CARRY_STRIKER");
+
+  const heroPoolSupportsNullifier =
+    buildArch.isPhysicalRightClicker &&
+    (META_NULLIFIER_CARRIER_HERO_IDS.has(Number(player.hero_id)) || metaProfile.topMetaItemIds.includes(225) || arch === "CARRY_STRIKER");
+
+  // Профильный контроль/дебафф для кастеров (MID_SPELLCASTER: Invoker, Storm, Puck, Zeus и др.): Hex (#96), Orchid (#98), Bloodthorn (#250), Shiva (#119)
+  const casterControlIds = [96, 250, 98, 119];
+  const hasCasterProfileCounter = hasAnyItem(casterControlIds);
+  const ownedCasterCounterNames = casterControlIds
+    .filter(id => hasItem(id))
+    .map(id => (ITEMS_DB[id] && ITEMS_DB[id].name) || `Item #${id}`);
+
   const enemyControlHeroes = [];
   const enemyAoEControlHeroes = [];
   const enemySingleTargetHeroes = [];
   const enemyCheapLinkenPoppers = [];
 
-  const enemyEulsHolders = [];       // Eul's (#100) / Wind Waker (#610)
-  const enemyGhostHolders = [];      // Ghost Scepter (#37) / Ethereal Blade (#176)
-  const enemyGlimmerHolders = [];    // Glimmer Cape (#254)
-  const enemyForceHolders = [];      // Force Staff (#102) / Hurricane Pike (#263)
-  const enemyAeonHolders = [];       // Aeon Disk (#256)
-  const enemyBarrierHolders = [];    // Crimson (#242) / Solar Crest (#229) / Pavise (#1128)
-  const enemyInnatePurgeSaves = [];  // Necrophos, Pugna, Omniknight, Windranger
+  const enemyEulsHolders = [];
+  const enemyDefensiveEulsHolders = [];
+  const enemyGhostHolders = [];
+  const enemyGlimmerHolders = [];
+  const enemyForceHolders = [];
+  const enemyAeonHolders = [];
+  const enemyLateSavePurchases = [];
+  const enemyInnatePurgeSaves = [];
 
-  const enemyButterflyHolders = [];  // Butterfly (#139)
-  const enemyRadianceHolders = [];   // Radiance (#137)
-  const enemyHighEvasionHeroes = []; // PA, WR, Arc Warden, Brewmaster
-  const enemyBlindHeroes = [];       // Riki, Troll, Hoodwink, Brood, KotL, Tinker
-
-  const enemyCriticalPassives = [];  // Bristleback, Spectre, Huskar, Timbersaw
-  const enemySecondaryPassives = []; // PA, Tide, Abaddon, DK, Underlord, Mars, Enchantress
-
-  const enemySustainHeroes = [];     // Huskar, Alch, Morph, Necro, Io, Bristle, Timber, Lifestealer, Slark, Pudge, Abaddon, Leshrac
-  const enemySustainItems = [];      // Satanic (#156), Heart (#114), Bloodstone (#121), Eternal Shroud (#692)
-
-  const enemyIllusionSwarm = [];     // PL, Naga, CK, Meepo, Broodmother, TB
-  const enemyRangedKite = [];        // Sniper, Drow, WR, Muerta, Tinker, Arc, Veno, Viper, Skywrath
-  const enemyElusiveSpirits = [];    // Storm, Ember, Void Spirit, Puck, Weaver, AM, QoP
-  const enemyMagicBurst = [];        // Zeus, Leshrac, Jakiro, Veno, Necro, SK, Invoker, Skywrath, Lina, Tinker...
+  const enemyCriticalPassives = [];
+  const enemySecondaryPassives = [];
+  const enemySustainHeroes = [];
+  const enemySustainItems = [];
+  const enemyIllusionSwarm = [];
+  const enemyMagicBurst = [];
 
   const findEnemyItemTimeSec = (ep, targetItemIds) => {
     const pLog = Array.isArray(ep.purchase_log) ? ep.purchase_log : [];
@@ -1775,6 +2224,8 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
     }
     return null;
   };
+
+  const isBoughtRightBeforeMatchEnd = (tSec) => typeof tSec === "number" && durationSec > 600 && (durationSec - tSec < 300);
 
   for (const ep of (enemyPlayers || [])) {
     const hId = Number(ep.hero_id);
@@ -1790,78 +2241,89 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
     }
     if (CHEAP_LINKEN_POPPER_HERO_IDS.has(hId)) enemyCheapLinkenPoppers.push(hName);
 
-    // 1. Сейвы под Nullifier
     if (epHas(100) || epHas(610)) {
       const itemName = epHas(610) ? "Wind Waker" : "Eul's Scepter";
       const tSec = findEnemyItemTimeSec(ep, [610, 100]);
-      enemyEulsHolders.push({ heroName: hName, itemName, timeSec: tSec, label: `${hName} (${itemName}${tSec ? ` ${formatClock(tSec)}` : ""})` });
+      const obj = { heroId: hId, heroName: hName, itemName, timeSec: tSec, label: `${hName} (${itemName}${tSec ? ` ${formatClock(tSec)}` : ""})` };
+      if (isBoughtRightBeforeMatchEnd(tSec)) {
+        enemyLateSavePurchases.push(obj.label);
+      } else {
+        enemyEulsHolders.push(obj);
+        if (epHas(610) || !OFFENSIVE_EULS_INITIATOR_HERO_IDS.has(hId)) {
+          enemyDefensiveEulsHolders.push(obj);
+        }
+      }
     }
     if (epHas(37) || epHas(176)) {
       const itemName = epHas(176) ? "Ethereal Blade" : "Ghost Scepter";
       const tSec = findEnemyItemTimeSec(ep, [176, 37]);
-      enemyGhostHolders.push({ heroName: hName, itemName, timeSec: tSec, label: `${hName} (${itemName}${tSec ? ` ${formatClock(tSec)}` : ""})` });
+      const obj = { heroName: hName, itemName, timeSec: tSec, label: `${hName} (${itemName}${tSec ? ` ${formatClock(tSec)}` : ""})` };
+      if (isBoughtRightBeforeMatchEnd(tSec)) {
+        enemyLateSavePurchases.push(obj.label);
+      } else {
+        enemyGhostHolders.push(obj);
+      }
     }
     if (epHas(254)) {
-      enemyGlimmerHolders.push({ heroName: hName, itemName: "Glimmer Cape", label: `${hName} (Glimmer Cape)` });
+      const tSec = findEnemyItemTimeSec(ep, [254]);
+      const lbl = `${hName} (Glimmer Cape${tSec ? ` ${formatClock(tSec)}` : ""})`;
+      if (isBoughtRightBeforeMatchEnd(tSec)) {
+        enemyLateSavePurchases.push(lbl);
+      } else {
+        enemyGlimmerHolders.push({ heroName: hName, itemName: "Glimmer Cape", timeSec: tSec, label: lbl });
+      }
     }
     if (epHas(102) || epHas(263)) {
       const itemName = epHas(263) ? "Hurricane Pike" : "Force Staff";
-      enemyForceHolders.push({ heroName: hName, itemName, label: `${hName} (${itemName})` });
+      const tSec = findEnemyItemTimeSec(ep, [263, 102]);
+      const lbl = `${hName} (${itemName}${tSec ? ` ${formatClock(tSec)}` : ""})`;
+      if (isBoughtRightBeforeMatchEnd(tSec)) {
+        enemyLateSavePurchases.push(lbl);
+      } else {
+        enemyForceHolders.push({ heroName: hName, itemName, timeSec: tSec, label: lbl });
+      }
     }
     if (epHas(256)) {
-      enemyAeonHolders.push({ heroName: hName, itemName: "Aeon Disk", label: `${hName} (Aeon Disk)` });
-    }
-    if (epHas(242) || epHas(229) || epHas(1128)) {
-      const itemName = epHas(242) ? "Crimson Guard" : epHas(229) ? "Solar Crest" : "Pavise";
-      enemyBarrierHolders.push({ heroName: hName, itemName, label: `${hName} (${itemName})` });
+      const tSec = findEnemyItemTimeSec(ep, [256]);
+      const lbl = `${hName} (Aeon Disk${tSec ? ` ${formatClock(tSec)}` : ""})`;
+      if (isBoughtRightBeforeMatchEnd(tSec)) {
+        enemyLateSavePurchases.push(lbl);
+      } else {
+        enemyAeonHolders.push({ heroName: hName, itemName: "Aeon Disk", timeSec: tSec, label: lbl });
+      }
     }
     if (PURGEABLE_INNATE_SAVE_HEROES[hId]) {
       enemyInnatePurgeSaves.push(PURGEABLE_INNATE_SAVE_HEROES[hId]);
     }
 
-    // 2. Уклонение / Бабочка / Миссы под MKB
-    if (epHas(139)) {
-      const tSec = findEnemyItemTimeSec(ep, [139]);
-      enemyButterflyHolders.push({
-        heroId: hId,
-        heroName: hName,
-        timeSec: tSec,
-        label: `${hName} (Butterfly${tSec ? ` ${formatClock(tSec)}` : ""})`
-      });
-    }
-    if (epHas(137)) {
-      const tSec = findEnemyItemTimeSec(ep, [137]);
-      enemyRadianceHolders.push({
-        heroId: hId,
-        heroName: hName,
-        timeSec: tSec,
-        label: `${hName} (Radiance${tSec ? ` ${formatClock(tSec)}` : ""})`
-      });
-    }
-    if (HIGH_INNATE_EVASION_HEROES[hId]) enemyHighEvasionHeroes.push(HIGH_INNATE_EVASION_HEROES[hId]);
-    if (BLIND_OR_MISS_HEROES[hId]) enemyBlindHeroes.push(BLIND_OR_MISS_HEROES[hId]);
-
-    // 3. Пассивки под Break (Silver Edge)
     if (CRITICAL_PASSIVE_BOSS_HEROES[hId]) enemyCriticalPassives.push(CRITICAL_PASSIVE_BOSS_HEROES[hId]);
     else if (SECONDARY_PASSIVE_HEROES[hId]) enemySecondaryPassives.push(SECONDARY_PASSIVE_HEROES[hId]);
 
-    // 4. Хил / Вампиризм / Сустейн под Skadi / Shiva / Vessel
     if (HEAVY_SUSTAIN_HEROES[hId]) enemySustainHeroes.push(HEAVY_SUSTAIN_HEROES[hId]);
     if (epHas(156) || epHas(114) || epHas(121)) {
       const sItem = epHas(156) ? "Satanic" : epHas(114) ? "Heart of Tarrasque" : "Bloodstone";
       enemySustainItems.push(`${hName} (${sItem})`);
     }
 
-    // 5. Иллюзии / Клоны / Кайт / Спириты / Маг-прокаст
     if (ILLUSION_OR_SWARM_HEROES[hId]) enemyIllusionSwarm.push(ILLUSION_OR_SWARM_HEROES[hId]);
-    if (RANGED_KITE_HERO_IDS.has(hId)) enemyRangedKite.push(hName);
-    if (ELUSIVE_SPIRIT_HEROES[hId]) enemyElusiveSpirits.push(ELUSIVE_SPIRIT_HEROES[hId]);
     if (HEAVY_MAGIC_BURST_HERO_IDS.has(hId)) enemyMagicBurst.push(hName);
   }
 
+  const targetThreatReport = analyzeEnemyTargetThreats({
+    player,
+    roleInfo,
+    buildArch,
+    allPlayerItems,
+    purchaseLog,
+    enemyPlayers,
+    durationSec,
+    findEnemyItemTimeSec,
+    isBoughtRightBeforeMatchEnd
+  });
+
   const enemyControlNamesStr = enemyControlHeroes.slice(0, 5).join(", ");
   const needsBkbToHit =
-    !roleInfo.isSupport &&
+    (arch === "CARRY_STRIKER" || arch === "MID_RIGHTCLICKER" || arch === "OFFLANE_DUELIST") &&
     !isInnateImmuneOrElusive &&
     (BKB_DEPENDENT_STRIKER_HERO_IDS.has(player.hero_id) || metaProfile.bkbIsPopular);
 
@@ -1881,11 +2343,12 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
     metaProfile,
     durationMin,
     netWorth,
-    wonMatch
+    wonMatch,
+    targetThreatReport
   );
 
   let hasCriticalBuildMistake = false;
-  let buildVerdictStatus = "good"; // 'good' | 'warning' | 'hidden_ruin' | 'empty_networth'
+  let buildVerdictStatus = "good";
   let buildScore = 94;
   const criticalHeadlines = [];
   const criticalExplanations = [];
@@ -1896,7 +2359,6 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
   const buildFindings = [];
   const itemTimelinePills = [];
 
-  // Помощник: какие слоты игрок купил ПОСЛЕ появления вражеского предмета (если матч распарсен)
   const getItemsBoughtAfterSec = (afterSec, excludeItemIds = []) => {
     if (!afterSec || !Array.isArray(purchaseLog) || purchaseLog.length === 0) return [];
     const list = [];
@@ -1915,159 +2377,156 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
   };
 
   // =========================================================================
-  // ВЕКТОР 1: АНТИ-СЕЙВ И ПУРЖ (NULLIFIER #225 ПРОТИВ EUL'S / GHOST / GLIMMER / FORCE / AEON / NECRO / PUGNA)
+  // ПРОВЕРКА 0: ДЕТЕКТОР АБСУРДНОГО ЗАКУПА / ТРОЛЛИНГА СБОРКОЙ НА КОРАХ (Pos 1–3)
   // =========================================================================
-  const allSaveLabels = [
-    ...enemyEulsHolders.map(x => x.label),
-    ...enemyGhostHolders.map(x => x.label),
-    ...enemyAeonHolders.map(x => x.label),
-    ...enemyGlimmerHolders.map(x => x.label),
-    ...enemyForceHolders.map(x => x.label),
-    ...enemyInnatePurgeSaves
-  ];
-  const hardCycloneOrGhostCount = enemyEulsHolders.length + enemyGhostHolders.length + enemyAeonHolders.length + enemyInnatePurgeSaves.length;
-  const totalPurgeableSaveCount = allSaveLabels.length;
-  const hasNullifier = hasItem(225);
-  const teamHasNullifier = teamAllItemIds.has(225);
-  const isJuggernaut = Number(player.hero_id) === 8;
-  const isNullifierCore = !roleInfo.isSupport && (isJuggernaut || NULLIFIER_CARRIER_HERO_IDS.has(player.hero_id) || buildArch.isPhysicalRightClicker);
+  if (invAudit.isTrollOrAbsurdBuild && invAudit.trollBuildReason) {
+    hasCriticalBuildMistake = true;
+    buildVerdictStatus = "empty_networth";
+    buildScore = 18;
+    const trollHeadline = `Руин / троллинг сборкой на ${roleInfo.heroName}: ${invAudit.trollBuildReason}!`;
+    criticalHeadlines.push(trollHeadline);
+    criticalExplanations.push(`На кор-позиции «${roleInfo.roleLabel}» вместо боевых слотов собрал нерабочий инвентарь (${invAudit.trollBuildReason}).`);
 
-  if (isNullifierCore && (enemyEulsHolders.length >= 2 || hardCycloneOrGhostCount >= 2 || totalPurgeableSaveCount >= 3)) {
-    const saveSummaryStr = allSaveLabels.slice(0, 4).join(", ");
-    const eulsCount = enemyEulsHolders.length;
-    const eulsWord = eulsCount >= 2 ? `${eulsCount} ${enemyEulsHolders.some(x => x.itemName === "Wind Waker") ? "Eul's / Wind Waker" : "Eul's Scepter"}` : `${totalPurgeableSaveCount} сейв-слотов`;
+    counterMatrix.push({
+      status: "failed",
+      category: "Целостность сборки (Кор-слоты)",
+      threat: `Реализация ${netWorth.toLocaleString("ru-RU")} 🪙 нетворса`,
+      expectedItems: metaProfile.topMetaItemNames.slice(0, 4).join(", "),
+      playerResponse: `✕ Руин сборкой: ${invAudit.trollBuildReason}`
+    });
 
-    if (hasNullifier) {
-      const nullEntry = findItemPurchaseEntry(225, ITEMS_DB[225], purchaseLog);
-      const nullTimeStr = nullEntry && typeof nullEntry.time === "number" ? ` на ${formatClock(nullEntry.time)}` : "";
-      positiveNotes.push(`Грамотно собрал Nullifier${nullTimeStr} против сейвов врага (${saveSummaryStr}).`);
-      counterMatrix.push({
-        status: "passed",
-        category: "Анти-сейв (Nullifier)",
-        threat: `Сейвы врага (${totalPurgeableSaveCount}): ${saveSummaryStr}`,
-        expectedItems: "Nullifier",
-        playerResponse: `✓ Купил Nullifier${nullTimeStr} (снимает ветра/гост/глиммер)`
-      });
-    } else if ((durationMin >= 24 || netWorth >= 14000) && (isJuggernaut || !teamHasNullifier || eulsCount >= 2)) {
-      const earliestSaveSec = Math.min(
-        ...([...enemyEulsHolders, ...enemyGhostHolders].map(x => x.timeSec).filter(Boolean).concat([99999]))
-      );
-      const boughtInstead = earliestSaveSec < 99999 ? getItemsBoughtAfterSec(earliestSaveSec, [225]) : [];
-      const boughtInsteadText = boughtInstead.length > 0
-        ? ` (после появления сейвов купил ${boughtInstead.join(" → ")} вместо Nullifier)`
-        : "";
-
-      const headlineMsg = eulsCount >= 2
-        ? `Не купил Nullifier на ${roleInfo.heroName} против ${eulsWord} у врагов!`
-        : `Не купил Nullifier на ${roleInfo.heroName} против сейвов врага (${saveSummaryStr})!`;
-      const detailMsg = isJuggernaut
-        ? `У врагов собрано ${totalPurgeableSaveCount} сейвов (${saveSummaryStr}), которые полностью сбрасывают Omnislash и физический фокус Juggernaut, но при нетворсе ${netWorth.toLocaleString("ru-RU")} 🪙 игрок проигнорировал Nullifier${boughtInsteadText}.`
-        : `Против ${saveSummaryStr} физическому кору ${roleInfo.heroName} необходим Nullifier для пуржа ветров/гостов/глиммеров, но за ${Math.round(durationMin)} мин слот так и не был куплен${boughtInsteadText}.`;
-
-      hasCriticalBuildMistake = true;
-      buildVerdictStatus = "hidden_ruin";
-      buildScore -= 30;
-      criticalHeadlines.push(headlineMsg);
-      criticalExplanations.push(detailMsg);
-
-      counterMatrix.push({
-        status: "failed",
-        category: "Анти-сейв (Nullifier)",
-        threat: `Сейвы врага (${totalPurgeableSaveCount}): ${saveSummaryStr}`,
-        expectedItems: "Nullifier",
-        playerResponse: `✕ Не купил Nullifier (${isJuggernaut ? "Omnislash контрится в 0" : "враги кайтят в сейвах"})`
-      });
-
-      buildFindings.push({
-        categoryKey: "economy",
-        maxCap: 35,
-        points: isJuggernaut || eulsCount >= 3 ? 22 : 19,
-        badge: eulsCount >= 2 ? `Без Nullifier в ${eulsCount} Еула` : "Без Nullifier в сейвы",
-        reason: {
-          type: "ballast",
-          category: "Оценщик билда (ИИ)",
-          timestamp: "Контр-закуп",
-          title: headlineMsg,
-          shortPill: `0 Nullifier против ${eulsWord}`,
-          detail: detailMsg
-        }
-      });
-    }
+    buildFindings.push({
+      categoryKey: "economy",
+      maxCap: 35,
+      points: 28,
+      badge: "Троллинг сборкой",
+      reason: {
+        type: "sabotage",
+        category: "Пустой нетворс",
+        timestamp: "Инвентарь",
+        title: trollHeadline,
+        shortPill: "Мусор / дубликаты в слотах при высоком NW",
+        detail: invAudit.trollBuildReason
+      }
+    });
   }
 
   // =========================================================================
-  // ВЕКТОР 2: АНТИ-УКЛОНЕНИЕ / TRUE STRIKE (MKB #135 / BLOODTHORN #250 ПРОТИВ BUTTERFLY #139 / PA / WR / RADIANCE)
+  // ПРОВЕРКА 1 МАТРИЦЫ: АНТИ-УКЛОНЕНИЕ (MKB для физ-коров vs Hex/Orchid/Shiva для кастеров)
   // =========================================================================
-  const evasionThreatLabels = [
-    ...enemyButterflyHolders.map(x => x.label),
-    ...enemyHighEvasionHeroes,
-    ...enemyRadianceHolders.map(x => x.label),
-    ...enemyBlindHeroes
-  ];
-  const hasSeriousEvasionThreat =
-    enemyButterflyHolders.length >= 1 ||
-    enemyHighEvasionHeroes.length >= 1 ||
-    (enemyRadianceHolders.length + enemyBlindHeroes.length >= 2);
+  if (targetThreatReport.hasAnyEvasionOnMap) {
+    const evasionSummaryStr = targetThreatReport.allDetectedEvasionLabels.slice(0, 3).join(", ");
+    const unresolvedSummaryStr = targetThreatReport.unresolvedLabels.slice(0, 3).join(", ") || evasionSummaryStr;
 
-  const hasTrueStrike = hasItem(135) || hasItem(250) || hasItem(911); // MKB (#135), Bloodthorn (#250), Revenant's Brooch (#911)
-  // Важно: если сам игрок играет на Juggernaut, мы не требуем от него покупать MKB против самого себя (enemyPlayers уже содержит только врагов!)
-  if (buildArch.isPhysicalRightClicker && hasSeriousEvasionThreat) {
-    const evasionSummaryStr = evasionThreatLabels.slice(0, 3).join(", ");
-    if (hasTrueStrike) {
-      const tsItemId = hasItem(135) ? 135 : hasItem(250) ? 250 : 911;
-      const tsName = (ITEMS_DB[tsItemId] && ITEMS_DB[tsItemId].name) || "Monkey King Bar";
-      const tsEntry = findItemPurchaseEntry(tsItemId, ITEMS_DB[tsItemId], purchaseLog);
-      const tsTimeStr = tsEntry && typeof tsEntry.time === "number" ? ` на ${formatClock(tsEntry.time)}` : "";
-      positiveNotes.push(`Собрал ${tsName}${tsTimeStr} (True Strike) против уклонения врага (${evasionSummaryStr}).`);
+    const hasDirectTrueStrike = arch === "MID_RIGHTCLICKER"
+      ? hasAnyItem([135, 250, 911, 96])
+      : hasAnyItem([135, 250, 911]);
+
+    if (arch === "MID_SPELLCASTER") {
+      // С кастеров (Invoker, Storm, Puck, Zeus и др.) ЗАПРЕЩЕНО требовать MKB! Проверяем их профильный контроль/дебафф (Hex / Orchid / Bloodthorn / Shiva)
+      if (hasCasterProfileCounter) {
+        const cNames = ownedCasterCounterNames.slice(0, 2).join(", ");
+        positiveNotes.push(`На кастере ${roleInfo.heroName} собрал профильный контроль/дебафф (${cNames}) против ${evasionSummaryStr}.`);
+        counterMatrix.push({
+          status: "passed",
+          category: "Контроль кастера против уклонения",
+          threat: `Уклонение / Мобильность: ${evasionSummaryStr}`,
+          expectedItems: "Scythe of Vyse (Hex) / Orchid / Shiva's Guard",
+          playerResponse: `✓ Собрано по мете мага: ${cNames} (MKB кастеру не нужен)`
+        });
+      } else {
+        counterMatrix.push({
+          status: "passed",
+          category: "Анти-уклонение (По роли кастера)",
+          threat: `Уклонение / Миссы: ${evasionSummaryStr}`,
+          expectedItems: "Урон со способностей / Hex / Shiva (MKB не требуется)",
+          playerResponse: `✓ ЗАКРЫТО ПО РОЛИ: ${roleInfo.heroName} играет через маг-прокаст (покупка MKB — задача физ-керри)`
+        });
+      }
+    } else if (!heroPoolSupportsMkb) {
       counterMatrix.push({
         status: "passed",
         category: "Анти-уклонение (MKB)",
         threat: `Уклонение / Миссы: ${evasionSummaryStr}`,
-        expectedItems: "Monkey King Bar / Bloodthorn",
-        playerResponse: `✓ Купил ${tsName}${tsTimeStr} (пробивает уклонение)`
+        expectedItems: "По роли не требуется",
+        playerResponse: "✓ ЗАКРЫТО ПО РОЛИ: Урон со способностей / контроль (покупка MKB — задача райткликера)"
       });
-    } else if (durationMin >= 23 || netWorth >= 13500) {
-      const bflyHeroNames = enemyButterflyHolders.map(x => x.heroName).join(", ");
+    } else if (hasDirectTrueStrike) {
+      const ansId = [135, 250, 911, 96].find(id => hasItem(id)) || 135;
+      const ansName = (ITEMS_DB[ansId] && ITEMS_DB[ansId].name) || "Monkey King Bar";
+      const ansEntry = findItemPurchaseEntry(ansId, ITEMS_DB[ansId], purchaseLog);
+      const ansTimeStr = ansEntry && typeof ansEntry.time === "number" ? ` на ${formatClock(ansEntry.time)}` : "";
+      positiveNotes.push(`Собрал ${ansName}${ansTimeStr} против уклонения врага (${evasionSummaryStr}).`);
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-уклонение (MKB)",
+        threat: `Уклонение / Миссы: ${evasionSummaryStr}`,
+        expectedItems: arch === "MID_RIGHTCLICKER" ? "MKB / Bloodthorn / Hex" : "Monkey King Bar / Bloodthorn",
+        playerResponse: `✓ Купил ${ansName}${ansTimeStr} (пробивает уклонение)`
+      });
+    } else if (!targetThreatReport.mkbStrictlyRequired) {
+      const smartReasonText = targetThreatReport.resolvedNotes.length > 0
+        ? targetThreatReport.resolvedNotes[0]
+        : `Низкий вес миссов (${evasionSummaryStr}) — тратить 4700 🪙 и слот на MKB нецелесообразно (Slot Efficiency)`;
+
+      positiveNotes.push(`Грамотный менеджмент слотов: не стал тратить слот на MKB (${smartReasonText}).`);
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-уклонение и ценность слота",
+        threat: `Второстепенные миссы: ${evasionSummaryStr}`,
+        expectedItems: "MKB НЕ требуется (закрыто Nullifier / диспелом / АС)",
+        playerResponse: `✓ ГРАМОТНЫЙ ОТКАЗ ОТ MKB: ${smartReasonText}`
+      });
+    } else if (wonMatch) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-уклонение (MKB)",
+        threat: `Уклонение врага: ${unresolvedSummaryStr}`,
+        expectedItems: "Monkey King Bar / Bloodthorn",
+        playerResponse: "✓ ЗАКРЫТО ПО ИГРЕ: Победа и высокий ДПС без покупки MKB"
+      });
+    } else if (!wonMatch && targetThreatReport.mkbStrictlyRequired && (durationMin >= 23 || netWorth >= 13500)) {
+      const bflyHeroNames = targetThreatReport.activeButterflyHolders.map(x => x.heroName).join(", ");
       const earliestBflySec = Math.min(
-        ...(enemyButterflyHolders.map(x => x.timeSec).filter(Boolean).concat([99999]))
+        ...(targetThreatReport.activeButterflyHolders.map(x => x.timeSec).filter(Boolean).concat([99999]))
       );
       const boughtAfterBfly = earliestBflySec < 99999 ? getItemsBoughtAfterSec(earliestBflySec, [135, 250]) : [];
       const boughtAfterBflyText = boughtAfterBfly.length > 0
         ? ` (после покупки врагом Butterfly взял ${boughtAfterBfly.join(" → ")} вместо MKB)`
         : "";
 
-      const mkbHeadline = enemyButterflyHolders.length >= 1
+      const mkbHeadline = targetThreatReport.activeButterflyHolders.length >= 1
         ? `Не купил MKB на ${roleInfo.heroName} против Butterfly у ${bflyHeroNames}!`
-        : `Не купил MKB на ${roleInfo.heroName} против уклонения врага (${evasionSummaryStr})!`;
-      const mkbDetail = enemyButterflyHolders.length >= 1
-        ? `У вражеского кора ${enemyButterflyHolders.map(x => x.label).join(", ")} собрана Butterfly (35% уклонения)${enemyHighEvasionHeroes.length > 0 ? ` + ${enemyHighEvasionHeroes.join(", ")}` : ""}, но физический кор ${roleInfo.heroName} при нетворсе ${netWorth.toLocaleString("ru-RU")} 🪙 не купил Monkey King Bar${boughtAfterBflyText}, теряя более трети ДПС с руки в разменах!`
-        : `Против ${evasionSummaryStr} райткликеру ${roleInfo.heroName} критически нужен Monkey King Bar (или Bloodthorn) для True Strike, но за ${Math.round(durationMin)} мин слот не был собран.`;
+        : `Не купил MKB на ${roleInfo.heroName} против тяжелого уклонения (${unresolvedSummaryStr})!`;
+      const mkbDetail = targetThreatReport.activeButterflyHolders.length >= 1
+        ? `У вражеского кора ${targetThreatReport.activeButterflyHolders.map(x => x.label).join(", ")} собрана Butterfly (35% уклонения), но ${roleInfo.heroName} (${buildArch.archetypeLabel}) при нетворсе ${netWorth.toLocaleString("ru-RU")} 🪙 не купил Monkey King Bar${boughtAfterBflyText}, теряя более трети ДПС с руки!`
+        : `Против тяжелого уклонения (${unresolvedSummaryStr}) райткликеру ${roleInfo.heroName} критически нужен Monkey King Bar (или Bloodthorn) для True Strike, но за ${Math.round(durationMin)} мин слот не был собран.`;
 
       hasCriticalBuildMistake = true;
       buildVerdictStatus = "hidden_ruin";
-      buildScore -= 30;
+      buildScore -= 28;
       criticalHeadlines.push(mkbHeadline);
       criticalExplanations.push(mkbDetail);
 
       counterMatrix.push({
         status: "failed",
         category: "Анти-уклонение (MKB)",
-        threat: `Уклонение / Миссы: ${evasionSummaryStr}`,
-        expectedItems: "Monkey King Bar (MKB)",
-        playerResponse: `✕ Нет MKB / Bloodthorn (промахи с руки по ${bflyHeroNames || evasionSummaryStr})`
+        threat: `Тяжелое уклонение: ${unresolvedSummaryStr}`,
+        expectedItems: arch === "MID_RIGHTCLICKER" ? "MKB / Bloodthorn / Hex" : "Monkey King Bar (MKB)",
+        playerResponse: `✕ Нет MKB / Bloodthorn (промахи с руки по ${bflyHeroNames || unresolvedSummaryStr})`
       });
 
       buildFindings.push({
         categoryKey: "economy",
         maxCap: 35,
-        points: enemyButterflyHolders.length >= 1 ? 22 : 19,
-        badge: enemyButterflyHolders.length >= 1 ? `Без MKB против Butterfly (${bflyHeroNames})` : "Без MKB против уклонения",
+        points: targetThreatReport.activeButterflyHolders.length >= 1 ? 22 : 18,
+        badge: targetThreatReport.activeButterflyHolders.length >= 1 ? `Без MKB против Butterfly (${bflyHeroNames})` : "Без MKB против уклонения",
         reason: {
           type: "ballast",
           category: "Оценщик билда (ИИ)",
           timestamp: "Контр-закуп",
           title: mkbHeadline,
-          shortPill: enemyButterflyHolders.length >= 1 ? `0 MKB против Butterfly (${bflyHeroNames})` : `0 MKB против ${evasionSummaryStr}`,
+          shortPill: targetThreatReport.activeButterflyHolders.length >= 1 ? `0 MKB против Butterfly (${bflyHeroNames})` : `0 MKB против ${unresolvedSummaryStr}`,
           detail: mkbDetail
         }
       });
@@ -2075,9 +2534,417 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
   }
 
   // =========================================================================
-  // ВЕКТОР 3: ЗАЩИТА ОТ КОНТРОЛЯ (BKB #116 VS ВСТРОЕННЫЙ ИММУНИТЕТ + ДИСПЕЛ)
+  // ПРОВЕРКА 2 МАТРИЦЫ: АНТИ-СЕЙВ (Nullifier для физ-керри Pos 1 vs Hex/Orchid/Shiva для кастеров)
   // =========================================================================
-  if (!roleInfo.isSupport && enemyControlHeroes.length >= 2) {
+  const realDefensiveSaves = [
+    ...enemyDefensiveEulsHolders.map(x => x.label),
+    ...enemyGhostHolders.map(x => x.label),
+    ...enemyAeonHolders.map(x => x.label),
+    ...enemyGlimmerHolders.map(x => x.label),
+    ...enemyForceHolders.map(x => x.label),
+    ...enemyInnatePurgeSaves
+  ];
+  const isJuggernaut = Number(player.hero_id) === 8;
+  const relevantSavesForHero = isJuggernaut
+    ? [
+        ...enemyEulsHolders.map(x => x.label),
+        ...enemyGhostHolders.map(x => x.label),
+        ...enemyAeonHolders.map(x => x.label),
+        ...enemyGlimmerHolders.map(x => x.label),
+        ...enemyForceHolders.map(x => x.label),
+        ...enemyInnatePurgeSaves
+      ]
+    : realDefensiveSaves;
+
+  const purgeableSavesCount = isJuggernaut
+    ? (enemyEulsHolders.length + enemyGhostHolders.length + enemyAeonHolders.length + enemyGlimmerHolders.length + enemyInnatePurgeSaves.length)
+    : (enemyDefensiveEulsHolders.length + enemyGhostHolders.length + enemyAeonHolders.length + enemyGlimmerHolders.length + enemyInnatePurgeSaves.length);
+
+  const totalKiteAndSaveCount = purgeableSavesCount + enemyForceHolders.length;
+
+  const hasNullifierThreat =
+    purgeableSavesCount >= 2 ||
+    (purgeableSavesCount >= 1 && enemyForceHolders.length >= 1) ||
+    enemyInnatePurgeSaves.length >= 1;
+
+  const hasNullifier = hasItem(225);
+  const hasAlternativeLockdown = hasAnyItem([96, 250, 98, 208]);
+  const hasEnemyInnateGhost = enemyInnatePurgeSaves.some(s => s.includes("Necrophos") || s.includes("Pugna") || s.includes("Omniknight"));
+
+  if (hasNullifierThreat || (enemyEulsHolders.length >= 2 && !heroPoolSupportsNullifier)) {
+    const saveSummaryStr = (relevantSavesForHero.length > 0 ? relevantSavesForHero : enemyEulsHolders.map(x => x.label)).slice(0, 4).join(", ");
+    const eulsCount = isJuggernaut ? enemyEulsHolders.length : enemyDefensiveEulsHolders.length;
+    const eulsWord = eulsCount >= 2 ? `${eulsCount} Eul's Scepter` : `${relevantSavesForHero.length} сейв-слотов`;
+
+    if (arch === "MID_SPELLCASTER") {
+      // Кастерам (Invoker, Storm, Puck, Zeus и др.) ЗАПРЕЩЕНО выдавать штраф за отсутствие Nullifier!
+      // Вместо этого проверяем наличие Scythe of Vyse (Hex), Orchid / Bloodthorn или Shiva's Guard:
+      if (hasCasterProfileCounter) {
+        const cNames = ownedCasterCounterNames.slice(0, 2).join(", ");
+        positiveNotes.push(`Против сейвов врага (${saveSummaryStr}) на кастере ${roleInfo.heroName} собран профильный слот: ${cNames}.`);
+        counterMatrix.push({
+          status: "passed",
+          category: "Контроль кастера против сейвов",
+          threat: `Сейвы врага: ${saveSummaryStr}`,
+          expectedItems: "Scythe of Vyse (Hex) / Orchid / Bloodthorn / Shiva's Guard",
+          playerResponse: `✓ Собрано по мете кастера: ${cNames} (Nullifier магу не нужен)`
+        });
+      } else if (!wonMatch && durationMin >= 30 && netWorth >= 15500) {
+        if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
+        buildScore -= 10;
+        const casterWarn = `На кастере ${roleInfo.heroName} не хватает Hex / Orchid / Shiva's Guard против сейвов (${saveSummaryStr})`;
+        warningHeadlines.push(casterWarn);
+        warningExplanations.push(`Против множества сейвов врага (${saveSummaryStr}) магу-кастеру ${roleInfo.heroName} рекомендуется добирать Scythe of Vyse (Hex), Orchid/Bloodthorn или Shiva's Guard.`);
+        counterMatrix.push({
+          status: "warning",
+          category: "Контроль кастера против сейвов",
+          threat: `Сейвы врага: ${saveSummaryStr}`,
+          expectedItems: "Scythe of Vyse (Hex) / Orchid / Shiva's Guard",
+          playerResponse: "⚠ Нет профильного Hex / Orchid / Shiva (Nullifier магу не требуется)"
+        });
+      } else {
+        counterMatrix.push({
+          status: "passed",
+          category: "Анти-сейв (По роли кастера)",
+          threat: `Сейвы врага: ${saveSummaryStr}`,
+          expectedItems: "Hex / Orchid / Shiva (Nullifier не входит в пул мага)",
+          playerResponse: "✓ ЗАКРЫТО ПО РОЛИ КАСТЕРА (покупка Nullifier — задача физ-керри Pos 1)"
+        });
+      }
+    } else if (hasNullifier) {
+      const nullEntry = findItemPurchaseEntry(225, ITEMS_DB[225], purchaseLog);
+      const nullTimeStr = nullEntry && typeof nullEntry.time === "number" ? ` на ${formatClock(nullEntry.time)}` : "";
+      positiveNotes.push(`Грамотно собрал Nullifier${nullTimeStr} против сейвов врага (${saveSummaryStr}).`);
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-сейв (Nullifier)",
+        threat: `Сейвы врага: ${saveSummaryStr}`,
+        expectedItems: "Nullifier",
+        playerResponse: `✓ Купил Nullifier${nullTimeStr} (снимает Ghost Shroud / ветра / гост / глиммер)`
+      });
+    } else if (teamHasNullifier) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-сейв (Nullifier)",
+        threat: `Сейвы врага: ${saveSummaryStr}`,
+        expectedItems: "Nullifier (в команде)",
+        playerResponse: "✓ ЗАКРЫТО КОМАНДОЙ (Nullifier / Demonic Purge уже есть у союзников)"
+      });
+    } else if (!heroPoolSupportsNullifier) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-сейв (Nullifier)",
+        threat: `Сейвы врага: ${saveSummaryStr}`,
+        expectedItems: "По роли не требуется",
+        playerResponse: "✓ ЗАКРЫТО ПО РОЛИ (покупка Nullifier — задача профильного физ-керри)"
+      });
+    } else if (hasAlternativeLockdown && !hasEnemyInnateGhost && arch !== "CARRY_STRIKER") {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-сейв (Nullifier)",
+        threat: `Сейвы врага: ${saveSummaryStr}`,
+        expectedItems: "Hex / Abyssal / Bloodthorn / Nullifier",
+        playerResponse: "✓ ЗАКРЫТО КОНТРОЛЕМ: Убивал цели за время Hex / Abyssal / сайленса до нажатия сейва"
+      });
+    } else if (wonMatch) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-сейв (Nullifier)",
+        threat: `Сейвы врага: ${saveSummaryStr}`,
+        expectedItems: "Nullifier (ситуативно)",
+        playerResponse: "✓ ЗАКРЫТО ПО ИГРЕ: Победа и реализация урона без необходимости в Nullifier"
+      });
+    } else if (
+      !wonMatch &&
+      heroPoolSupportsNullifier &&
+      purgeableSavesCount >= 1 &&
+      totalKiteAndSaveCount >= 2 &&
+      netWorth >= 14500 &&
+      durationMin >= 27
+    ) {
+      // ИСПРАВЛЕНО (Кейс Clinkz Pos 1): Если профильный физ-керри (Clinkz, PA, Juggernaut, Slark, Ursa и др.) проиграл игру
+      // и не купил Nullifier против сейвов врага (Eul's, Ghost, Glimmer, Force Staff) — всегда выдаем Red Trigger!
+      const headlineMsg = eulsCount >= 2
+        ? `Не купил Nullifier на ${roleInfo.heroName} против ${eulsWord} у врагов!`
+        : `Не купил Nullifier на ${roleInfo.heroName} против сейвов врага (${saveSummaryStr})!`;
+      const detailMsg = isJuggernaut
+        ? `У врагов собраны сейвы (${saveSummaryStr}), которые сбрасывают Omnislash и физический фокус Juggernaut, но при нетворсе ${netWorth.toLocaleString("ru-RU")} 🪙 к ${Math.round(durationMin)}-й минуте игрок так и не купил Nullifier.`
+        : `На профильном физ-коре ${roleInfo.heroName} (${buildArch.archetypeLabel}) при нетворсе ${netWorth.toLocaleString("ru-RU")} 🪙 за ${Math.round(durationMin)} мин не собран Nullifier против защитных сейвов врага (${saveSummaryStr}), из-за чего цели переживали фокус в драках!`;
+
+      hasCriticalBuildMistake = true;
+      buildVerdictStatus = "hidden_ruin";
+      buildScore -= 26;
+      criticalHeadlines.push(headlineMsg);
+      criticalExplanations.push(detailMsg);
+
+      counterMatrix.push({
+        status: "failed",
+        category: "Анти-сейв (Nullifier)",
+        threat: `Сейвы врага: ${saveSummaryStr}`,
+        expectedItems: "Nullifier (обязателен по мете героя против сейвов)",
+        playerResponse: `✕ Не купил Nullifier (враги кайтят и уходят в сейвах)`
+      });
+
+      buildFindings.push({
+        categoryKey: "economy",
+        maxCap: 35,
+        points: arch === "CARRY_STRIKER" || isJuggernaut || eulsCount >= 2 ? 22 : 18,
+        badge: eulsCount >= 2 ? `Без Nullifier в ${eulsCount} Еула` : "Без Nullifier в сейвы",
+        reason: {
+          type: "ballast",
+          category: "Оценщик билда (ИИ)",
+          timestamp: "Лейт-закуп",
+          title: headlineMsg,
+          shortPill: `0 Nullifier против ${eulsWord}`,
+          detail: detailMsg
+        }
+      });
+    } else if (hasNullifierThreat) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-сейв (Nullifier)",
+        threat: `Сейвы врага: ${saveSummaryStr}`,
+        expectedItems: "Nullifier (при NW >= 14.5k и 27+ мин)",
+        playerResponse: `✓ ЗАКРЫТО: Игра завершилась до выхода в слот Nullifier (NW ${netWorth.toLocaleString("ru-RU")} 🪙)`
+      });
+    }
+  } else if (enemyLateSavePurchases.length >= 1) {
+    counterMatrix.push({
+      status: "passed",
+      category: "Анти-сейв (Nullifier)",
+      threat: `Поздний сейв врага перед концом игры: ${enemyLateSavePurchases.join(", ")}`,
+      expectedItems: "Nullifier не требуется",
+      playerResponse: "✓ ЗАКРЫТО: Сейв куплен врагом перед самым падением трона (< 5 мин до конца)"
+    });
+  } else if (enemyEulsHolders.length >= 1) {
+    counterMatrix.push({
+      status: "passed",
+      category: "Анти-сейв (Nullifier)",
+      threat: `Ветра инициаторов: ${enemyEulsHolders.map(x => x.label).join(", ")}`,
+      expectedItems: "BKB / Linken's / Lotus (Nullifier не нужен)",
+      playerResponse: "✓ ЗАКРЫТО: Вражеские Eul's атакующие — защитный Nullifier не требуется"
+    });
+  }
+
+  // =========================================================================
+  // ПРОВЕРКА 3 МАТРИЦЫ: АНТИ-ХИЛ (Vessel / Skadi / Shiva для кастеров)
+  // =========================================================================
+  const allSustainThreats = [...enemySustainHeroes, ...enemySustainItems];
+  const hasHeavySustainThreat =
+    enemySustainItems.length >= 1 ||
+    enemySustainHeroes.some(h => ["Huskar", "Alchemist", "Morphling", "Necrophos", "Io", "Bristleback", "Timbersaw", "Centaur Warrunner"].includes(h)) ||
+    enemySustainHeroes.length >= 2;
+
+  const playerHasAntiHeal = hasAnyItem([267, 160, 569, 119]);
+  const sustainClosedByNullifierBurst =
+    hasNullifier &&
+    enemySustainHeroes.length === 1 &&
+    enemySustainHeroes[0] === "Necrophos" &&
+    enemySustainItems.length === 0;
+
+  if (hasHeavySustainThreat) {
+    const sustainStr = allSustainThreats.slice(0, 3).join(", ");
+    const expectedAntiHealItem = (arch === "CARRY_STRIKER" || arch === "MID_RIGHTCLICKER")
+      ? "Eye of Skadi"
+      : arch === "MID_SPELLCASTER"
+        ? "Shiva's Guard / Spirit Vessel"
+        : "Spirit Vessel";
+
+    if (playerHasAntiHeal) {
+      const ahName = hasItem(160) ? "Eye of Skadi" : hasItem(267) ? "Spirit Vessel" : hasItem(119) ? "Shiva's Guard" : "Orb of Corrosion";
+      positiveNotes.push(`Собрал анти-хил (${ahName}) против регена/вампиризма врага (${sustainStr}).`);
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-хил (Vessel / Skadi / Shiva)",
+        threat: `Хил / Вампиризм: ${sustainStr}`,
+        expectedItems: expectedAntiHealItem,
+        playerResponse: `✓ Купил ${ahName} (режет хил и реген врага)`
+      });
+    } else if (sustainClosedByNullifierBurst) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-хил и берст (Nullifier)",
+        threat: `Хил в Ghost Shroud: ${sustainStr}`,
+        expectedItems: "Nullifier / Eye of Skadi / Spirit Vessel",
+        playerResponse: "✓ ЗАКРЫТО СЛОТОМ NULLIFIER: Снимает Ghost Shroud с Некрофоса, лишая его усиленного отхила"
+      });
+    } else if (teamHasAntiHeal || teamHasAnyItem([119])) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-хил (Vessel / Skadi / Shiva)",
+        threat: `Хил / Вампиризм: ${sustainStr}`,
+        expectedItems: `${expectedAntiHealItem} (командный)`,
+        playerResponse: "✓ ЗАКРЫТО КОМАНДОЙ (в команде уже есть Spirit Vessel / Skadi / Shiva)"
+      });
+    } else if (durationMin >= 26 && !wonMatch && !isDominatingKillerCore && !isHighImpactWinnerOrCarry) {
+      const ahHeadline = `В команде нет анти-хила (${expectedAntiHealItem}) против ${sustainStr}`;
+      const ahDetail = `Против мощного сустейна/регена врага (${sustainStr}) вся команда осталась без анти-хила (на роли «${buildArch.archetypeLabel}» рекомендуется ${expectedAntiHealItem}).`;
+
+      if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
+      buildScore -= 9;
+      warningHeadlines.push(ahHeadline);
+      warningExplanations.push(ahDetail);
+
+      counterMatrix.push({
+        status: "warning",
+        category: "Анти-хил (Vessel / Skadi)",
+        threat: `Хил / Вампиризм: ${sustainStr}`,
+        expectedItems: expectedAntiHealItem,
+        playerResponse: `⚠ В команде 0 анти-хила (рекомендуется ${expectedAntiHealItem})`
+      });
+
+      buildFindings.push({
+        categoryKey: "economy",
+        maxCap: 35,
+        points: 9,
+        badge: "Без анти-хила (Vessel/Skadi)",
+        reason: {
+          type: "ballast",
+          category: "Оценщик билда (ИИ)",
+          timestamp: "Командный контр-закуп",
+          title: ahHeadline,
+          shortPill: `0 Vessel/Skadi против ${sustainStr}`,
+          detail: ahDetail
+        }
+      });
+    } else {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-хил (Vessel / Skadi)",
+        threat: `Хил / Вампиризм: ${sustainStr}`,
+        expectedItems: expectedAntiHealItem,
+        playerResponse: `✓ ЗАКРЫТО ПО ИГРЕ (${kills} фрагов / перебили сустейн фокусом)`
+      });
+    }
+  }
+
+  // =========================================================================
+  // ПРОВЕРКА 4 МАТРИЦЫ: ОТКЛЮЧЕНИЕ ПАССИВОК / BREAK (Silver Edge)
+  // =========================================================================
+  const allPassiveThreats = [...enemyCriticalPassives, ...enemySecondaryPassives];
+  const hasPassiveBoss = enemyCriticalPassives.length >= 1;
+  const hasSilverEdge = hasItem(249);
+  const hasUnupgradedShadowBlade = hasItem(152) && !hasSilverEdge;
+  const requiresBreakByArchetype =
+    (arch === "CARRY_STRIKER" || arch === "MID_RIGHTCLICKER" || arch === "OFFLANE_DUELIST") &&
+    (SILVER_EDGE_CARRIER_HERO_IDS.has(player.hero_id) || hasUnupgradedShadowBlade);
+
+  if (hasPassiveBoss) {
+    const passiveStr = allPassiveThreats.slice(0, 3).join(", ");
+    if (hasSilverEdge) {
+      positiveNotes.push(`Собрал Silver Edge (Break) против пассивок врага (${passiveStr}).`);
+      counterMatrix.push({
+        status: "passed",
+        category: "Отключение пассивок (Break)",
+        threat: `Пассивки врага: ${passiveStr}`,
+        expectedItems: "Silver Edge (Break)",
+        playerResponse: "✓ Купил Silver Edge (отключает пассивки)"
+      });
+    } else if (teamHasBreak) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Отключение пассивок (Break)",
+        threat: `Пассивки врага: ${passiveStr}`,
+        expectedItems: "Silver Edge / Break (в команде)",
+        playerResponse: "✓ ЗАКРЫТО КОМАНДОЙ (источник Break уже есть у союзников)"
+      });
+    } else if (!requiresBreakByArchetype) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Отключение пассивок (Break)",
+        threat: `Пассивки врага: ${passiveStr}`,
+        expectedItems: "По роли не требуется",
+        playerResponse: `✓ ЗАКРЫТО ПО РОЛИ (${roleInfo.heroName} играет через свои тайминги / способности)`
+      });
+    } else if (wonMatch) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Отключение пассивок (Break)",
+        threat: `Пассивки врага: ${passiveStr}`,
+        expectedItems: "Silver Edge (ситуативно)",
+        playerResponse: "✓ ЗАКРЫТО ПО ИГРЕ: Победа и реализация урона без необходимости в Break"
+      });
+    } else if (durationMin >= 28 && netWorth >= 16000 && !wonMatch && !isDominatingKillerCore) {
+      const breakHeadline = hasUnupgradedShadowBlade
+        ? `Не апгрейднул Shadow Blade в Silver Edge (Break) против ${passiveStr}!`
+        : `В команде нет Break (Silver Edge) против ${passiveStr}`;
+      const breakDetail = `Против плотных пассивок (${passiveStr}) у команды 0 источников Break. На ${roleInfo.heroName} можно было собрать Silver Edge для отключения пассивки.`;
+
+      if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
+      buildScore -= 12;
+      warningHeadlines.push(breakHeadline);
+      warningExplanations.push(breakDetail);
+
+      counterMatrix.push({
+        status: "warning",
+        category: "Отключение пассивок (Break)",
+        threat: `Пассивки врага: ${passiveStr}`,
+        expectedItems: "Silver Edge (Break)",
+        playerResponse: hasUnupgradedShadowBlade ? "⚠ Оставил Shadow Blade без апа в Silver Edge" : "⚠ Нет источника Break в команде"
+      });
+
+      buildFindings.push({
+        categoryKey: "economy",
+        maxCap: 35,
+        points: 12,
+        badge: "Без Break (Silver Edge)",
+        reason: {
+          type: "ballast",
+          category: "Оценщик билда (ИИ)",
+          timestamp: "Контр-закуп",
+          title: breakHeadline,
+          shortPill: `0 Break против ${passiveStr}`,
+          detail: breakDetail
+        }
+      });
+    }
+  }
+
+  // =========================================================================
+  // ПРОВЕРКА 5 МАТРИЦЫ: ЗАЩИТА ОТ КОНТРОЛЯ (BKB / Линка / Инициация + Сейв Позиции 3)
+  // =========================================================================
+  const hasInitiationSlot = hasAnyItem([1, 600, 603, 604, 939, 152, 249]);
+  const hasTankDefensiveOrTeamSlot = hasAnyItem([116, 90, 242, 226, 127, 119, 108, 692, 114, 231, 931]);
+
+  if (arch === "OFFLANE_TANK_INITIATOR") {
+    if (hasInitiationSlot && hasTankDefensiveOrTeamSlot) {
+      const initName = hasAnyItem([1, 600, 603, 604]) ? "Blink Dagger" : hasItem(939) ? "Harpoon" : "Shadow Blade / Silver Edge";
+      const defNames = richItems
+        .filter(i => [116, 90, 242, 226, 127, 119, 108, 692, 114, 231, 931].includes(i.id))
+        .map(i => i.name)
+        .slice(0, 3)
+        .join(", ");
+      positiveNotes.push(`Эталонная сборка танка-инициатора на ${roleInfo.heroName}: ${initName} + ${defNames}.`);
+      counterMatrix.push({
+        status: "passed",
+        category: "Инициация и Фронтлейн (Pos 3)",
+        threat: `Контроль и фокус врага (${enemyControlNamesStr || "командные драки"})`,
+        expectedItems: "Blink / Harpoon + BKB / Pipe / Lotus / Blade Mail / Shiva",
+        playerResponse: `✓ Собрал ${initName} + ${defNames}`
+      });
+    } else if (durationMin >= 25 && !hasInitiationSlot && !hasTankDefensiveOrTeamSlot && !wonMatch) {
+      if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
+      buildScore -= 18;
+      const tankWarn = `Танк-инициатор ${roleInfo.heroName} без слотов инициации и командного сейва`;
+      warningHeadlines.push(tankWarn);
+      warningExplanations.push(`На позиции «${buildArch.archetypeLabel}» не собрал связку инициации (Blink/Harpoon) и выживаемости (BKB/Pipe/Lotus/Blade Mail/Shiva).`);
+      counterMatrix.push({
+        status: "failed",
+        category: "Инициация и Фронтлейн (Pos 3)",
+        threat: `Задачи Pos 3 против пика врага`,
+        expectedItems: "Blink + BKB / Pipe / Lotus / Blade Mail",
+        playerResponse: "✕ Нет базовой связки инициации и защиты"
+      });
+    } else {
+      counterMatrix.push({
+        status: "passed",
+        category: "Инициация и Фронтлейн (Pos 3)",
+        threat: `Задачи танка-инициатора (${roleInfo.heroName})`,
+        expectedItems: "Blink / BKB / Pipe / Blade Mail / Shiva",
+        playerResponse: `✓ Собрано по роли Pos 3`
+      });
+    }
+  } else if (!roleInfo.isSupport && enemyControlHeroes.length >= 2) {
     if (isExemptByInnateAndMetaDispel) {
       const dispelNames = metaDispelItemsOwned.map(i => i.name).slice(0, 3).join(", ") || "мета-сейв";
       positiveNotes.push(`Герой ${roleInfo.heroName} имеет встроенный иммунитет/диспел и собрал ${dispelNames} — покупка BKB не требуется.`);
@@ -2089,8 +2956,19 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
         playerResponse: `✓ Закрыто механикой героя + ${dispelNames}`
       });
     } else if (needsBkbToHit) {
-      const isExemptWinningInitiator = wonMatch && roleInfo.isSpellcaster && deaths <= 8;
-      if (bkbBoughtAtSec !== null && bkbBoughtAtSec >= 1980 && !isExemptWinningInitiator) {
+      if (isHighImpactWinnerOrCarry) {
+        counterMatrix.push({
+          status: "passed",
+          category: "Защита от контроля (BKB)",
+          threat: `Контроль врага (${enemyControlHeroes.length}): ${enemyControlNamesStr}`,
+          expectedItems: "Black King Bar (BKB)",
+          playerResponse: hasBkbInInventory
+            ? `✓ Купил BKB${bkbBoughtAtStr ? ` (${bkbBoughtAtStr})` : ""}${wonMatch ? " и выиграл матч" : " против контроля врага"}`
+            : wonMatch
+              ? "✓ ЗАКРЫТО ПО ИГРЕ: Победа и реализация урона без необходимости в BKB"
+              : "✓ ЗАКРЫТО ПО ИГРЕ: Реализовал урон за счет мобильности и позиционки"
+        });
+      } else if (bkbBoughtAtSec !== null && bkbBoughtAtSec >= 1980 && !wonMatch) {
         hasCriticalBuildMistake = true;
         buildVerdictStatus = "hidden_ruin";
         buildScore -= 32;
@@ -2157,7 +3035,7 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
             detail: `С 20-й минуты до ${bkbBoughtAtStr} выходил в командные замесы без Black King Bar против пика с жестким контролем.`
           }
         });
-      } else if (bkbBoughtAtSec !== null && bkbBoughtAtSec >= 1650) {
+      } else if (bkbBoughtAtSec !== null && bkbBoughtAtSec >= 1650 && !wonMatch) {
         if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
         buildScore -= 14;
         const delayMin = Math.max(5, Math.round((bkbBoughtAtSec - 1380) / 60));
@@ -2191,7 +3069,7 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
             detail: `Против ${enemyControlNamesStr} на ${roleInfo.heroName} BKB требовался к 22–24 минуте, но появился только на ${bkbBoughtAtStr}.`
           }
         });
-      } else if (!hasBkbInInventory && !hasLinkensInInventory && bkbBoughtAtSec === null && durationMin >= 26 && enemyControlHeroes.length >= 2 && (enemyControlHeroes.length >= 3 || !wonMatch || deaths >= 7)) {
+      } else if (!hasBkbInInventory && !hasLinkensInInventory && bkbBoughtAtSec === null && durationMin >= 26 && enemyControlHeroes.length >= 2 && !wonMatch) {
         hasCriticalBuildMistake = true;
         buildVerdictStatus = "hidden_ruin";
         buildScore -= 28;
@@ -2234,285 +3112,7 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
     }
   }
 
-  // =========================================================================
-  // ВЕКТОР 4: ИСТОЧНИКИ BREAK (SILVER EDGE #249 ПРОТИВ BRISTLEBACK / SPECTRE / HUSKAR / TIMBERSAW / PA)
-  // =========================================================================
-  const allPassiveThreats = [...enemyCriticalPassives, ...enemySecondaryPassives];
-  const hasPassiveBoss = enemyCriticalPassives.length >= 1 || enemySecondaryPassives.length >= 2;
-  const hasSilverEdge = hasItem(249);
-  const hasUnupgradedShadowBlade = hasItem(152) && !hasSilverEdge;
-  const teamHasBreak =
-    teamAllItemIds.has(249) ||
-    allyPlayers.some(ap =>
-      ap.hero_id === 47 || // Viper (Viper Strike / Nethertoxin)
-      ((ap.hero_id === 123 || ap.hero_id === 79 || ap.hero_id === 44) && getPlayerAllItemIds(ap).includes(108))
-    );
-
-  if (!roleInfo.isSupport && hasPassiveBoss && (SILVER_EDGE_CARRIER_HERO_IDS.has(player.hero_id) || hasUnupgradedShadowBlade || hasSilverEdge)) {
-    const passiveStr = allPassiveThreats.slice(0, 3).join(", ");
-    if (hasSilverEdge) {
-      positiveNotes.push(`Собрал Silver Edge (Break) для отключения пассивок врага (${passiveStr}).`);
-      counterMatrix.push({
-        status: "passed",
-        category: "Отключение пассивок (Break)",
-        threat: `Пассивки врага: ${passiveStr}`,
-        expectedItems: "Silver Edge",
-        playerResponse: "✓ Купил Silver Edge (отключает пассивки)"
-      });
-    } else if (!teamHasBreak && (durationMin >= 25 || netWorth >= 14000) && (enemyCriticalPassives.length >= 1 || hasUnupgradedShadowBlade)) {
-      const breakHeadline = hasUnupgradedShadowBlade
-        ? `Не апгрейднул Shadow Blade в Silver Edge (Break) против ${passiveStr}!`
-        : `Игнор Silver Edge (Break) на ${roleInfo.heroName} против пассивок (${passiveStr})!`;
-      const breakDetail = `Во вражеском пике есть тяжелые пассивки (${passiveStr}), а у всей команды 0 источников Break. На ${roleInfo.heroName} ${hasUnupgradedShadowBlade ? "оставил обычный Shadow Blade без апгрейда в Silver Edge" : "проигнорировал покупку Silver Edge"}, из-за чего вражеский фронтлейн жил в драках в разы дольше.`;
-
-      if (enemyCriticalPassives.length >= 1 && (!wonMatch || hasUnupgradedShadowBlade)) {
-        hasCriticalBuildMistake = true;
-        buildVerdictStatus = "hidden_ruin";
-        buildScore -= 22;
-        criticalHeadlines.push(breakHeadline);
-        criticalExplanations.push(breakDetail);
-      } else {
-        if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
-        buildScore -= 14;
-        warningHeadlines.push(breakHeadline);
-        warningExplanations.push(breakDetail);
-      }
-
-      counterMatrix.push({
-        status: "failed",
-        category: "Отключение пассивок (Break)",
-        threat: `Пассивки врага: ${passiveStr}`,
-        expectedItems: "Silver Edge (Break)",
-        playerResponse: hasUnupgradedShadowBlade ? "✕ Оставил Shadow Blade без апа в Silver Edge" : "✕ 0 источников Break в сборке"
-      });
-
-      buildFindings.push({
-        categoryKey: "economy",
-        maxCap: 35,
-        points: 18,
-        badge: "Без Break (Silver Edge)",
-        reason: {
-          type: "ballast",
-          category: "Оценщик билда (ИИ)",
-          timestamp: "Контр-закуп",
-          title: breakHeadline,
-          shortPill: `0 Break против ${passiveStr}`,
-          detail: breakDetail
-        }
-      });
-    }
-  }
-
-  // =========================================================================
-  // ВЕКТОР 5: АНТИ-ХИЛ И РЕЗКА ВАМПИРИЗМА (SKADI #160 / SHIVA #119 / SPIRIT VESSEL #267)
-  // =========================================================================
-  const allSustainThreats = [...enemySustainHeroes, ...enemySustainItems];
-  const hasHeavySustainThreat =
-    enemySustainItems.length >= 1 ||
-    enemySustainHeroes.some(h => ["Huskar", "Alchemist", "Morphling", "Necrophos", "Io", "Bristleback", "Timbersaw"].includes(h)) ||
-    enemySustainHeroes.length >= 2;
-
-  const hasAntiHealItem = hasItem(160) || hasItem(119) || hasItem(267) || hasItem(569);
-  const teamHasAntiHeal =
-    teamAllItemIds.has(160) ||
-    teamAllItemIds.has(119) ||
-    teamAllItemIds.has(267) ||
-    allyPlayers.some(ap => ap.hero_id === 68 || ap.hero_id === 69); // AA / Doom
-
-  if (hasHeavySustainThreat && (!roleInfo.isSupport || roleInfo.position === 4)) {
-    const sustainStr = allSustainThreats.slice(0, 3).join(", ");
-    const recommendedAntiHeal = roleInfo.isSupport
-      ? "Spirit Vessel"
-      : (roleInfo.isSpellcaster || roleInfo.position === 3) && !buildArch.isPhysicalRightClicker
-        ? "Shiva's Guard / Spirit Vessel"
-        : "Eye of Skadi";
-
-    if (hasAntiHealItem) {
-      const ahName = hasItem(160) ? "Eye of Skadi" : hasItem(119) ? "Shiva's Guard" : hasItem(267) ? "Spirit Vessel" : "Orb of Corrosion";
-      positiveNotes.push(`Собрал анти-хил (${ahName}) против лечения/вампиризма врага (${sustainStr}).`);
-      counterMatrix.push({
-        status: "passed",
-        category: "Анти-хил / Реген-резка",
-        threat: `Хил / Вампиризм: ${sustainStr}`,
-        expectedItems: recommendedAntiHeal,
-        playerResponse: `✓ Купил ${ahName} (-40% хила/регена)`
-      });
-    } else if (!teamHasAntiHeal && durationMin >= 26 && ((roleInfo.position <= 3 && netWorth >= 14500) || (roleInfo.position === 4 && netWorth >= 7500)) && (!wonMatch || allSustainThreats.length >= 2)) {
-      const ahHeadline = `Игнор анти-хила (${recommendedAntiHeal}) на ${roleInfo.heroName} против ${sustainStr}!`;
-      const ahDetail = `У врагов мощный отхил/вампиризм (${sustainStr}), но ни ${roleInfo.heroName}, ни его команда не купили ${recommendedAntiHeal} (Skadi / Shiva / Vessel), позволив вражеским корам бесконечно восстанавливать ХП в драках.`;
-
-      if (!wonMatch && roleInfo.position <= 3) {
-        hasCriticalBuildMistake = true;
-        if (buildVerdictStatus === "good") buildVerdictStatus = "hidden_ruin";
-        buildScore -= 20;
-        criticalHeadlines.push(ahHeadline);
-        criticalExplanations.push(ahDetail);
-      } else {
-        if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
-        buildScore -= 12;
-        warningHeadlines.push(ahHeadline);
-        warningExplanations.push(ahDetail);
-      }
-
-      counterMatrix.push({
-        status: "failed",
-        category: "Анти-хил / Реген-резка",
-        threat: `Хил / Вампиризм: ${sustainStr}`,
-        expectedItems: recommendedAntiHeal,
-        playerResponse: `✕ 0 анти-хила в инвентаре (враги хилятся на 100%)`
-      });
-
-      buildFindings.push({
-        categoryKey: "economy",
-        maxCap: 35,
-        points: 16,
-        badge: "Без анти-хила (Skadi/Shiva/Vessel)",
-        reason: {
-          type: "ballast",
-          category: "Оценщик билда (ИИ)",
-          timestamp: "Контр-закуп",
-          title: ahHeadline,
-          shortPill: `0 анти-хила против ${sustainStr}`,
-          detail: ahDetail
-        }
-      });
-    }
-  }
-
-  // =========================================================================
-  // ВЕКТОР 6: АНТИ-ИЛЛЮЗИИ И АОЕ-ЗАЧИСТКА (MJOLLNIR #158 / BF #145 / RADIANCE #137 / GLEIPNIR #1466 / SHIVA #119)
-  // =========================================================================
-  const hasAoEItem = hasItem(158) || hasItem(166) || hasItem(145) || hasItem(137) || hasItem(1466) || hasItem(119);
-  if (!roleInfo.isSupport && enemyIllusionSwarm.length >= 1) {
-    const illuStr = enemyIllusionSwarm.join(", ");
-    const hasInnateAoE = INNATE_AOE_CLEAR_HERO_IDS.has(player.hero_id);
-    if (hasAoEItem || hasInnateAoE) {
-      const aoeItemName = hasItem(158) ? "Mjollnir" : hasItem(145) ? "Battle Fury" : hasItem(137) ? "Radiance" : hasItem(1466) ? "Gleipnir" : hasItem(119) ? "Shiva's Guard" : hasItem(166) ? "Maelstrom" : "Встроенный AoE";
-      counterMatrix.push({
-        status: "passed",
-        category: "Анти-иллюзии (AoE)",
-        threat: `Иллюзии / Клоны: ${illuStr}`,
-        expectedItems: "Mjollnir / Battle Fury / Radiance / Shiva",
-        playerResponse: `✓ Есть зачистка: ${aoeItemName}`
-      });
-    } else if (roleInfo.position <= 2 && (durationMin >= 25 || netWorth >= 14000)) {
-      const illuHeadline = `Соло-таргет билд на ${roleInfo.heroName} без AoE-слотов против ${illuStr}!`;
-      const illuDetail = `Против иллюзиониста/саммонера (${illuStr}) кор ${roleInfo.heroName} не собрал ни Mjollnir, ни Battle Fury, ни Radiance, ни Shiva's Guard, захлебываясь в иллюзиях в мид и лейт-гейме.`;
-
-      if (!wonMatch) {
-        hasCriticalBuildMistake = true;
-        if (buildVerdictStatus === "good") buildVerdictStatus = "hidden_ruin";
-        buildScore -= 20;
-        criticalHeadlines.push(illuHeadline);
-        criticalExplanations.push(illuDetail);
-      } else {
-        if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
-        buildScore -= 12;
-        warningHeadlines.push(illuHeadline);
-        warningExplanations.push(illuDetail);
-      }
-
-      counterMatrix.push({
-        status: "failed",
-        category: "Анти-иллюзии (AoE)",
-        threat: `Иллюзии / Клоны: ${illuStr}`,
-        expectedItems: "Mjollnir / Battle Fury / Radiance / Gleipnir",
-        playerResponse: "✕ Чистый соло-таргет без AoE-зачистки"
-      });
-
-      buildFindings.push({
-        categoryKey: "economy",
-        maxCap: 35,
-        points: 17,
-        badge: `Без AoE против ${enemyIllusionSwarm[0]}`,
-        reason: {
-          type: "ballast",
-          category: "Оценщик билда (ИИ)",
-          timestamp: "Контр-закуп",
-          title: illuHeadline,
-          shortPill: `0 AoE-слотов против ${illuStr}`,
-          detail: illuDetail
-        }
-      });
-    }
-  }
-
-  // =========================================================================
-  // ВЕКТОР 7: АНТИ-КАЙТ МОБИЛЬНОСТЬ МИЛИШНИКА И ЛОКДАУН ПРОТИВ СПИРИТОВ
-  // =========================================================================
-  const hasMobilityGapClose = hasItem(1) || hasItem(600) || hasItem(603) || hasItem(604) || hasItem(939) || hasItem(152) || hasItem(249) || hasItem(208);
-  if (!roleInfo.isSupport && KITEABLE_MELEE_CORE_HERO_IDS.has(player.hero_id) && (enemyRangedKite.length >= 2 || enemyForceHolders.length >= 2)) {
-    const kiteStr = [...new Set([...enemyRangedKite, ...enemyForceHolders.map(x => x.label)])].slice(0, 3).join(", ");
-    if (hasMobilityGapClose) {
-      const mobName = (hasItem(1) || hasItem(600) || hasItem(603)) ? "Blink Dagger" : hasItem(939) ? "Harpoon" : hasItem(208) ? "Abyssal Blade" : "Shadow Blade / Silver Edge";
-      counterMatrix.push({
-        status: "passed",
-        category: "Анти-кайт / Сближение",
-        threat: `Кайт-пик: ${kiteStr}`,
-        expectedItems: "Blink / Harpoon / Abyssal / Silver Edge",
-        playerResponse: `✓ Собрал ${mobName} для сокращения дистанции`
-      });
-    } else if (durationMin >= 24 && netWorth >= 12000 && (!wonMatch || deaths >= 7)) {
-      const kiteHeadline = `Милишный кор ${roleInfo.heroName} без слотов сближения (Blink / Harpoon / Abyssal) против кайт-пика (${kiteStr})!`;
-      const kiteDetail = `Играя на ближнем бое (${roleInfo.heroName}) против дальнобойного кайта (${kiteStr}), не купил ни Blink Dagger, ни Harpoon, ни Abyssal Blade, ни Silver Edge — враги расстреливали его на дистанции.`;
-      if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
-      buildScore -= 16;
-      warningHeadlines.push(kiteHeadline);
-      warningExplanations.push(kiteDetail);
-
-      counterMatrix.push({
-        status: "failed",
-        category: "Анти-кайт / Сближение",
-        threat: `Кайт-пик: ${kiteStr}`,
-        expectedItems: "Blink Dagger / Harpoon / Abyssal",
-        playerResponse: "✕ 0 слотов на сближение (легко кайтится)"
-      });
-
-      buildFindings.push({
-        categoryKey: "economy",
-        maxCap: 35,
-        points: 15,
-        badge: "Без сближения (кайт)",
-        reason: {
-          type: "ballast",
-          category: "Оценщик билда (ИИ)",
-          timestamp: "Контр-закуп",
-          title: kiteHeadline,
-          shortPill: `0 Blink/Harpoon против ${kiteStr}`,
-          detail: kiteDetail
-        }
-      });
-    }
-  }
-
-  // Проверка на мгновенный контроль (Hex / Orchid / Bloodthorn / Abyssal / Gleipnir) против неуловимых спиритов
-  const hasInstantLockdownItem = hasItem(96) || hasItem(98) || hasItem(250) || hasItem(208) || hasItem(1466);
-  const teamHasInstantLockdownItem = teamAllItemIds.has(96) || teamAllItemIds.has(98) || teamAllItemIds.has(250) || teamAllItemIds.has(208) || teamAllItemIds.has(1466);
-  if (!roleInfo.isSupport && enemyElusiveSpirits.length >= 1) {
-    const spiritStr = enemyElusiveSpirits.slice(0, 2).join(", ");
-    if (hasInstantLockdownItem) {
-      const lockName = hasItem(96) ? "Scythe of Vyse (Hex)" : hasItem(250) ? "Bloodthorn" : hasItem(98) ? "Orchid" : hasItem(208) ? "Abyssal Blade" : "Gleipnir";
-      counterMatrix.push({
-        status: "passed",
-        category: "Локдаун мобильных героев",
-        threat: `Неуловимые герои: ${spiritStr}`,
-        expectedItems: "Hex / Bloodthorn / Orchid / Abyssal",
-        playerResponse: `✓ Собрал ${lockName}`
-      });
-    } else if (!teamHasInstantLockdownItem && roleInfo.position <= 2 && durationMin >= 28 && !wonMatch) {
-      counterMatrix.push({
-        status: "warning",
-        category: "Локдаун мобильных героев",
-        threat: `Неуловимые герои: ${spiritStr}`,
-        expectedItems: "Scythe of Vyse / Bloodthorn / Abyssal",
-        playerResponse: `⚠ В команде 0 слотов мгновенного контроля против ${spiritStr}`
-      });
-    }
-  }
-
-  // =========================================================================
-  // ВЕКТОР 8: ЗАЩИТА ОТ НАПРАВЛЕННЫХ УЛЬТОВ (LINKEN'S #123 / LOTUS #226) И ДЕТЕКТОР ПУСТОЙ LINKEN'S SPHERE
-  // =========================================================================
+  // Проверка Linken's Sphere
   if (hasLinkensInInventory) {
     const linkenItemObj = richItems.find(i => i.id === 123);
     const linkenTimeStr = (linkenItemObj && linkenItemObj.boughtAt) || "Матч";
@@ -2565,113 +3165,177 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
         playerResponse: "✓ Купил Linken's Sphere по пику врага"
       });
     }
-  } else if (!roleInfo.isSupport && enemySingleTargetHeroes.some(h => ["Doom", "Legion Commander", "Bane", "Beastmaster", "Batrider"].some(k => h.includes(k))) && !hasBkbInInventory && !teamAllItemIds.has(226) && deaths >= 8 && durationMin >= 26) {
-    const stStr = enemySingleTargetHeroes.slice(0, 3).join(", ");
-    const stHeadline = `Нет Linken's Sphere / BKB на ${roleInfo.heroName} против направленных ультов (${stStr})!`;
-    const stDetail = `Против ${stStr} кор ${roleInfo.heroName} погиб ${deaths} раз, но не собрал ни Linken's Sphere, ни BKB (и в команде нет Lotus Orb).`;
-    if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
-    buildScore -= 15;
-    warningHeadlines.push(stHeadline);
-    warningExplanations.push(stDetail);
-
-    counterMatrix.push({
-      status: "failed",
-      category: "Защита от таргет-ультов (Linken's)",
-      threat: `Точечные ульты: ${stStr}`,
-      expectedItems: "Linken's Sphere / Lotus Orb / BKB",
-      playerResponse: `✕ 0 защиты от направленного ульта (${deaths} смертей)`
-    });
-
-    buildFindings.push({
-      categoryKey: "economy",
-      maxCap: 35,
-      points: 16,
-      badge: "Без Линки/Лотуса против ультов",
-      reason: {
-        type: "ballast",
-        category: "Оценщик билда (ИИ)",
-        timestamp: "Контр-закуп",
-        title: stHeadline,
-        shortPill: `Уязвим к ${stStr}`,
-        detail: stDetail
-      }
-    });
   }
 
   // =========================================================================
-  // ВЕКТОР 9: КОМАНДНЫЙ МАГ-РЕЗИСТ (PIPE #90 / SHROUD #692) И СЕЙВ-СЛОТЫ САППОРТОВ
+  // ПРОВЕРКА 6 МАТРИЦЫ: АНТИ-ИЛЛЮЗИИ (AoE), СЕЙВ САППОРТОВ И АКТУАЛЬНАЯ МЕТА
   // =========================================================================
-  if (roleInfo.position === 3 && enemyMagicBurst.length >= 3 && durationMin >= 25) {
-    const magStr = enemyMagicBurst.slice(0, 4).join(", ");
-    const hasMagResist = hasItem(90) || hasItem(692) || hasItem(598) || hasItem(116) || teamAllItemIds.has(90);
-    if (hasMagResist) {
-      const mrName = hasItem(90) ? "Pipe of Insight" : hasItem(692) ? "Eternal Shroud" : hasItem(598) ? "Mage Slayer" : hasItem(116) ? "Black King Bar" : "Командный Pipe";
+  const hasAoEItem = hasAnyItem([158, 166, 145, 137, 1466, 119]);
+  if (enemyIllusionSwarm.length >= 1) {
+    const illuStr = enemyIllusionSwarm.join(", ");
+    const hasInnateAoE = INNATE_AOE_CLEAR_HERO_IDS.has(player.hero_id);
+    if (hasAoEItem || hasInnateAoE) {
+      const aoeItemName = hasItem(158) ? "Mjollnir" : hasItem(145) ? "Battle Fury" : hasItem(137) ? "Radiance" : hasItem(1466) ? "Gleipnir" : hasItem(119) ? "Shiva's Guard" : hasItem(166) ? "Maelstrom" : "Встроенный AoE";
       counterMatrix.push({
         status: "passed",
-        category: "Магический резист (Pos 3)",
-        threat: `Тяжелый маг-урон (${enemyMagicBurst.length}): ${magStr}`,
-        expectedItems: "Pipe of Insight / Eternal Shroud / BKB",
-        playerResponse: `✓ Закрыто: ${mrName}`
+        category: "Анти-иллюзии (AoE)",
+        threat: `Иллюзии / Клоны: ${illuStr}`,
+        expectedItems: "Mjollnir / Battle Fury / Radiance / Shiva",
+        playerResponse: `✓ Есть зачистка: ${aoeItemName}`
       });
-    } else if (!wonMatch || deaths >= 8) {
-      const pipeHeadline = `Оффлейнер ${roleInfo.heroName} без Pipe / Eternal Shroud / BKB против ${enemyMagicBurst.length} магов (${magStr})!`;
-      const pipeDetail = `Против тяжелого магического прокаста (${magStr}) тройка ${roleInfo.heroName} не собрала ни Pipe of Insight для команды, ни Eternal Shroud / BKB для себя.`;
+    } else if (teamHasAoEClear || arch === "SUPPORT_UTILITY" || arch === "OFFLANE_TANK_INITIATOR" || arch === "OFFLANE_DUELIST" || isDominatingKillerCore) {
+      counterMatrix.push({
+        status: "passed",
+        category: "Анти-иллюзии (AoE)",
+        threat: `Иллюзии / Клоны: ${illuStr}`,
+        expectedItems: "Командный AoE / Соло-фокус главной цели",
+        playerResponse: isDominatingKillerCore
+          ? `✓ ЗАКРЫТО ФОКУСОМ: Вырезал цели за берст (${kills} фрагов)`
+          : teamHasAoEClear
+            ? "✓ ЗАКРЫТО КОМАНДОЙ (AoE-зачистка уже есть у союзников)"
+            : "✓ ЗАКРЫТО ПО РОЛИ"
+      });
+    } else if (arch === "CARRY_STRIKER" && durationMin >= 28 && netWorth >= 16000 && !wonMatch) {
+      const illuHeadline = `Нет AoE-зачистки против иллюзий (${illuStr})`;
+      const illuDetail = `Против ${illuStr} в команде не хватало AoE-урона (Mjollnir / Battle Fury / Radiance / Gleipnir).`;
       if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
-      buildScore -= 16;
-      warningHeadlines.push(pipeHeadline);
-      warningExplanations.push(pipeDetail);
+      buildScore -= 12;
+      warningHeadlines.push(illuHeadline);
+      warningExplanations.push(illuDetail);
 
       counterMatrix.push({
-        status: "failed",
-        category: "Магический резист (Pos 3)",
-        threat: `Тяжелый маг-урон (${enemyMagicBurst.length}): ${magStr}`,
-        expectedItems: "Pipe of Insight / Eternal Shroud / BKB",
-        playerResponse: "✕ 0 слотов на маг-барьер команды"
+        status: "warning",
+        category: "Анти-иллюзии (AoE)",
+        threat: `Иллюзии / Клоны: ${illuStr}`,
+        expectedItems: "Mjollnir / Battle Fury / Radiance / Gleipnir",
+        playerResponse: "⚠ Соло-таргет билд без AoE против иллюзий"
       });
 
       buildFindings.push({
         categoryKey: "economy",
         maxCap: 35,
-        points: 16,
-        badge: "Тройка без Pipe/BKB",
+        points: 10,
+        badge: null,
         reason: {
           type: "ballast",
           category: "Оценщик билда (ИИ)",
           timestamp: "Контр-закуп",
-          title: pipeHeadline,
-          shortPill: `0 Pipe/Shroud против ${magStr}`,
-          detail: pipeDetail
+          title: illuHeadline,
+          shortPill: `0 AoE-слотов против ${illuStr}`,
+          detail: illuDetail
         }
       });
     }
   }
 
-  // Проверка саппортов (Pos 4 / Pos 5) на жадный кор-закуп без единого сейв-предмета
-  if (roleInfo.isSupport && durationMin >= 23 && netWorth >= 7500) {
-    const saveUtilityOwned = richItems.filter(i => SUPPORT_UTILITY_ITEM_IDS.has(i.id) || i.id === 226 || i.id === 100 || i.id === 267 || i.id === 1);
-    const greedyCarryOwned = richItems.filter(i => GREEDY_SUPPORT_CARRY_ITEM_IDS.has(i.id));
-    if (saveUtilityOwned.length === 0 && greedyCarryOwned.length >= 1 && (!wonMatch || deaths >= 8)) {
+  // =========================================================================
+  // БАЛАНС ОТВЕТСТВЕННОСТИ САППОРТОВ (Pos 4 / Pos 5): РЕАЛЬНЫЕ СЕЙВ-СЛОТЫ VS ЖАДНЫЙ ЗАКУП
+  // =========================================================================
+  const REAL_SUPPORT_SAVE_ITEM_IDS = new Set([
+    79,   // Mekansm
+    81,   // Vladmir's Offering
+    90,   // Pipe of Insight
+    96,   // Scythe of Vyse (Hex)
+    100,  // Eul's Scepter
+    102,  // Force Staff
+    185,  // Drum of Endurance
+    206,  // Rod of Atos
+    210,  // Heaven's Halberd
+    226,  // Lotus Orb
+    229,  // Solar Crest
+    231,  // Guardian Greaves
+    242,  // Crimson Guard
+    254,  // Glimmer Cape
+    263,  // Hurricane Pike
+    267,  // Spirit Vessel
+    269,  // Holy Locket
+    610,  // Wind Waker
+    931,  // Boots of Bearing
+    1128  // Pavise
+  ]);
+
+  const EXPANDED_GREEDY_SUPPORT_ITEM_IDS = new Set([
+    ...GREEDY_SUPPORT_CARRY_ITEM_IDS,
+    65,   // Hand of Midas
+    98,   // Orchid Malevolence
+    104,  // Dagon 1
+    112,  // Assault Cuirass
+    114,  // Heart of Tarrasque
+    121,  // Bloodstone
+    133,  // Divine Rapier
+    149,  // Crystalys
+    154,  // Sange and Yasha
+    172,  // Mask of Madness
+    174,  // Diffusal Blade
+    176,  // Ethereal Blade
+    208,  // Abyssal Blade
+    223,  // Meteor Hammer
+    225,  // Nullifier
+    235,  // Octarine Core
+    236,  // Dragon Lance
+    252,  // Echo Sabre
+    259,  // Kaya and Sange
+    277,  // Yasha and Kaya
+    534,  // Witch Blade
+    597,  // Parasma
+    692,  // Eternal Shroud
+    911,  // Revenant's Brooch
+    939,  // Harpoon
+    1097, // Disperser
+    1100, // Phylactery
+    1107, // Khanda
+    1164, // Parasma
+    1806  // Parasma
+  ]);
+
+  let supportWentGreedyNoSave = false;
+
+  if (arch === "SUPPORT_UTILITY" && durationMin >= 18 && netWorth >= 4500) {
+    const saveUtilityOwned = richItems.filter(i => REAL_SUPPORT_SAVE_ITEM_IDS.has(i.id));
+    const greedyCarryOwned = richItems.filter(i =>
+      EXPANDED_GREEDY_SUPPORT_ITEM_IDS.has(i.id) ||
+      (i.id === 108 && saveUtilityOwned.length === 0)
+    );
+
+    // Проверяем также съеденный Аганим или Мидас в purchase_log при 0 сейвов
+    if (saveUtilityOwned.length === 0 && greedyCarryOwned.length === 0) {
+      if (player.aghanims_scepter === 1) {
+        greedyCarryOwned.push({ id: 108, name: "Aghanim's Scepter" });
+      } else if (Array.isArray(purchaseLog) && purchaseLog.some(e => e && e.key === "hand_of_midas")) {
+        greedyCarryOwned.push({ id: 65, name: "Hand of Midas" });
+      }
+    }
+
+    if (saveUtilityOwned.length === 0 && greedyCarryOwned.length >= 1) {
+      supportWentGreedyNoSave = true;
       const greedyNames = greedyCarryOwned.map(i => i.name).join(", ");
-      const supHeadline = `Сборка в голый урон на саппорте ${roleInfo.heroName} (${greedyNames}) без единого сейва!`;
-      const supDetail = `На позиции «${roleInfo.roleLabel}» вместо Force Staff / Glimmer Cape / Lotus Orb / Solar Crest потратил ${netWorth.toLocaleString("ru-RU")} 🪙 на жадные слоты (${greedyNames}), оставив своих коров без подсейва.`;
-      hasCriticalBuildMistake = true;
-      buildVerdictStatus = "hidden_ruin";
-      buildScore -= 26;
-      criticalHeadlines.push(supHeadline);
-      criticalExplanations.push(supDetail);
+      const supHeadline = `Жадная сборка на саппорте ${roleInfo.heroName} (${greedyNames}) при 0 сейв-предметов!`;
+      const supDetail = `На позиции «${roleInfo.roleLabel}» вместо Glimmer Cape / Force Staff / Solar Crest / Lotus Orb / Pavise потратил золото на жадные слоты (${greedyNames}), оставив команду без подсейва.`;
+
+      buildScore -= wonMatch ? 24 : 32;
+      if (!wonMatch || deaths >= 8) {
+        hasCriticalBuildMistake = true;
+        buildVerdictStatus = "hidden_ruin";
+        criticalHeadlines.push(supHeadline);
+        criticalExplanations.push(supDetail);
+      } else {
+        if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
+        warningHeadlines.push(supHeadline);
+        warningExplanations.push(supDetail);
+      }
 
       counterMatrix.push({
         status: "failed",
         category: "Сейв-слоты саппорта",
         threat: `Подсейв союзников против ${enemyControlNamesStr || "фокуса врага"}`,
-        expectedItems: "Force Staff / Glimmer Cape / Lotus Orb / Solar Crest",
-        playerResponse: `✕ 0 сейвов (собрал ${greedyNames})`
+        expectedItems: "Glimmer Cape / Force Staff / Solar Crest / Lotus Orb / Pavise",
+        playerResponse: `✕ 0 сейвов (купил ${greedyNames})`
       });
 
       buildFindings.push({
         categoryKey: "economy",
         maxCap: 35,
-        points: 20,
+        points: !wonMatch ? 24 : (deaths >= 8 ? 20 : 14),
         badge: "Саппорт без сейв-слотов",
         reason: {
           type: "ballast",
@@ -2682,21 +3346,45 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
           detail: supDetail
         }
       });
-    } else if (saveUtilityOwned.length >= 2) {
+    } else if (saveUtilityOwned.length >= 1) {
       counterMatrix.push({
         status: "passed",
         category: "Сейв-слоты саппорта",
         threat: `Защита союзных коров в драках`,
-        expectedItems: "Force Staff / Glimmer / Solar Crest / Lotus",
+        expectedItems: "Force Staff / Glimmer / Solar Crest / Lotus / Pavise",
         playerResponse: `✓ Собрано: ${saveUtilityOwned.map(i => i.name).slice(0, 3).join(", ")}`
+      });
+    } else if (!wonMatch && durationMin >= 25 && netWorth >= 5500) {
+      if (buildVerdictStatus === "good") buildVerdictStatus = "warning";
+      buildScore -= 14;
+      const noSaveWarn = `Саппорт ${roleInfo.heroName} не собрал ни одного сейв-слота за ${Math.round(durationMin)} мин`;
+      warningHeadlines.push(noSaveWarn);
+      warningExplanations.push(`На позиции «${roleInfo.roleLabel}» к концу игры нет ни Force Staff, ни Glimmer Cape, ни Solar Crest / Pavise.`);
+      counterMatrix.push({
+        status: "failed",
+        category: "Сейв-слоты саппорта",
+        threat: `Защита союзных коров в драках`,
+        expectedItems: "Force Staff / Glimmer Cape / Solar Crest / Pavise",
+        playerResponse: `✕ 0 командных сейв-предметов за ${Math.round(durationMin)} мин`
+      });
+      buildFindings.push({
+        categoryKey: "economy",
+        maxCap: 35,
+        points: 15,
+        badge: "Саппорт без сейв-слотов",
+        reason: {
+          type: "ballast",
+          category: "Сборка саппорта",
+          timestamp: "Весь матч",
+          title: noSaveWarn,
+          shortPill: "0 сейв-артефактов за матч",
+          detail: `За ${Math.round(durationMin)} минут на позиции поддержки не купил ни одного предмета для спасения союзников.`
+        }
       });
     }
   }
 
-  // =========================================================================
-  // ВЕКТОР 10: СООТВЕТСТВИЕ ЖИВОЙ МЕТЕ (STRATZ + OPENDOTA), АНТИ-СИНЕРГИИ И ТАЙМИНГИ
-  // =========================================================================
-  // 10А. Механическая анти-синергия: Battle Fury (#145) или Echo Sabre/Harpoon (#252/#939) на герое дальнего боя (Ranged)
+  // Механическая анти-синергия: Battle Fury (#145) или Echo Sabre/Harpoon (#252/#939) на герое дальнего боя (Ranged)
   if (buildArch.isRanged && (hasItem(145) || hasItem(252) || hasItem(939))) {
     const badMeleeItem = hasItem(145) ? "Battle Fury" : hasItem(939) ? "Harpoon" : "Echo Sabre";
     const antiSynHeadline = `Анти-синергия механики Доты: ${badMeleeItem} куплен на герое дальнего боя (${roleInfo.heroName})!`;
@@ -2731,62 +3419,70 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
     });
   }
 
-  // 10Б. Проверка окупаемости фарм-слотов (Midas, Battle Fury, Radiance)
+  // Проверка окупаемости фарм-слотов (Midas, Battle Fury, Radiance)
   const hasMidas = hasItem(65) || (Array.isArray(purchaseLog) && purchaseLog.some(x => x && x.key === "hand_of_midas"));
   const hasBfury = hasItem(145);
   const hasRadiance = hasItem(137);
-  const playerGpm = player.gold_per_min || 0;
-  const playerDpg = (player.hero_damage || 0) / Math.max(1, player.total_gold || (playerGpm * durationMin) || 1);
+  const towerDmgNow = player.tower_damage || 0;
+  const farmItemPaidOffByMacro = playerGpm >= 600 || towerDmgNow >= 4000 || (player.last_hits || 0) >= durationMin * 9.5;
 
-  if (!roleInfo.isSupport && durationMin >= 24 && (hasBfury || hasRadiance || hasMidas) && playerDpg < 0.80 && !wonMatch) {
+  if (!roleInfo.isSupport && durationMin >= 24 && (hasBfury || hasRadiance || hasMidas) && playerDpg < 0.80 && !farmItemPaidOffByMacro && !wonMatch) {
     const farmItemName = hasBfury ? "Battle Fury" : hasRadiance ? "Radiance" : "Hand of Midas";
     const farmItemId = hasBfury ? 145 : hasRadiance ? 137 : 65;
     const farmItemObj = richItems.find(i => i.id === farmItemId);
     if (farmItemObj && farmItemObj.timingStatus === "ok") {
       farmItemObj.timingStatus = "useless";
-      farmItemObj.timingNote = `Не окупился: с ${farmItemName} нанес всего ${playerDpg.toFixed(2)} урона на 1 золото`;
+      farmItemObj.timingNote = `Не окупился: с ${farmItemName} нанес всего ${playerDpg.toFixed(2)} урона на 1 золото и не разогнал темп`;
     }
     if (buildVerdictStatus === "good") buildVerdictStatus = "empty_networth";
     buildScore -= 15;
-    warningHeadlines.push(`Пустой нетворс: ${farmItemName} не окупился и не дал урона в игре`);
-    warningExplanations.push(`Купил слот на разгон фарма (${farmItemName}), но за ${Math.round(durationMin)} минут конвертировал ресурсы лишь в ${playerDpg.toFixed(2)} урона на единицу золота.`);
+    warningHeadlines.push(`Пустой нетворс: ${farmItemName} не окупился и не дал ни фарма, ни урона`);
+    warningExplanations.push(`Купил слот на разгон фарма (${farmItemName}), но за ${Math.round(durationMin)} минут не разогнал экономику (GPM ${playerGpm}) и дал лишь ${playerDpg.toFixed(2)} урона на единицу золота.`);
   }
 
-  // 10В. Соответствие живой мете героя (STRATZ API + OpenDota itemPopularity + универсальные контр-слоты)
-  const validUniversalSituationalIds = new Set([1, 37, 48, 50, 63, 90, 96, 100, 102, 108, 112, 114, 116, 119, 123, 135, 139, 141, 147, 154, 156, 160, 180, 208, 214, 220, 225, 226, 229, 231, 232, 235, 249, 250, 254, 256, 263, 267, 600, 603, 604, 610, 692, 931, 1097]);
-  const majorOwned = richItems.filter(i => i.major && !i.boots);
-  const metaMatchedItems = majorOwned.filter(
-    i => metaProfile.topMetaItemIds.includes(i.id) || META_DISPEL_OR_SAVE_ITEM_IDS.has(i.id) || validUniversalSituationalIds.has(i.id)
-  );
-  const directHeroMetaMatched = majorOwned.filter(i => metaProfile.topMetaItemIds.includes(i.id));
+  // Соответствие живой мете героя
+  const RAW_COMPONENT_NAMES_BLACKLIST = new Set([
+    "Mithril Hammer", "Ogre Axe", "Broadsword", "Claymore", "Demon Edge", "Eaglesong",
+    "Reaver", "Sacred Relic", "Hyperstone", "Mystic Staff", "Ultimate Orb", "Platemail",
+    "Quarterstaff", "Javelin", "Blade of Alacrity", "Staff of Wizardry", "Point Booster",
+    "Vitality Booster", "Energy Booster", "Talisman of Evasion", "Shadow Amulet",
+    "Perseverance", "Oblivion Staff", "Cornucopia", "Ghost Scepter"
+  ]);
 
-  if (majorOwned.length >= 2) {
-    const metaMatchPct = Math.round((Math.max(directHeroMetaMatched.length, Math.ceil(metaMatchedItems.length * 0.85)) / majorOwned.length) * 100);
-    if (directHeroMetaMatched.length === 0 && metaMatchedItems.length === 0 && durationMin >= 22 && !wonMatch) {
-      if (buildVerdictStatus === "good") buildVerdictStatus = "empty_networth";
-      buildScore -= 20;
-      const offMetaNames = majorOwned.map(i => i.name).join(", ");
-      warningHeadlines.push(`Нестандартный анти-мета закуп на ${roleInfo.heroName}: ${offMetaNames}`);
-      warningExplanations.push(`Собранные предметы (${offMetaNames}) не входят в актуальный пул метовых сборок ${roleInfo.heroName} (рекомендуемая мета: ${metaProfile.topMetaItemNames.slice(0, 5).join(", ")}).`);
+  const cleanTopMetaNames = metaProfile.topMetaItemNames.filter(n => !RAW_COMPONENT_NAMES_BLACKLIST.has(n));
+  const validUniversalSituationalIds = new Set([1, 37, 48, 50, 63, 79, 81, 90, 96, 98, 100, 102, 108, 110, 112, 114, 116, 119, 121, 123, 127, 135, 139, 141, 143, 147, 152, 154, 156, 158, 160, 168, 174, 176, 180, 206, 208, 210, 214, 220, 223, 225, 226, 229, 231, 232, 235, 242, 249, 250, 252, 254, 256, 259, 263, 267, 273, 277, 534, 597, 598, 600, 603, 604, 610, 692, 911, 931, 939, 1097, 1100, 1107, 1466]);
+  const majorOwned = richItems.filter(i => i.major && !i.boots);
+
+  if (majorOwned.length >= 2 && !invAudit.isTrollOrAbsurdBuild) {
+    if (arch === "SUPPORT_UTILITY" && supportWentGreedyNoSave) {
       counterMatrix.push({
-        status: "failed",
+        status: "warning",
         category: "Актуальная мета (STRATZ / OpenDota)",
-        threat: `Эталон сборки ${roleInfo.heroName}`,
-        expectedItems: metaProfile.topMetaItemNames.slice(0, 4).join(", "),
-        playerResponse: `✕ 0 совпадений с метой (${offMetaNames})`
+        threat: `Мета-ядро для ${roleInfo.heroName} (${buildArch.archetypeLabel})`,
+        expectedItems: "Force Staff, Glimmer Cape, Solar Crest, Lotus Orb",
+        playerResponse: `⚠ Не по роли саппорта: ${majorOwned.map(i => i.name).slice(0, 4).join(", ")}`
       });
     } else {
+      const metaMatchedItems = majorOwned.filter(
+        i => metaProfile.topMetaItemIds.includes(i.id) || META_DISPEL_OR_SAVE_ITEM_IDS.has(i.id) || validUniversalSituationalIds.has(i.id)
+      );
+      const directHeroMetaMatched = majorOwned.filter(i => metaProfile.topMetaItemIds.includes(i.id));
+      const metaMatchPct = Math.round((Math.max(directHeroMetaMatched.length, Math.ceil(metaMatchedItems.length * 0.90)) / majorOwned.length) * 100);
+      const expectedMetaStr = arch === "SUPPORT_UTILITY" && PURE_POS1_CARRY_HERO_IDS.has(player.hero_id)
+        ? "Force Staff, Glimmer Cape, Solar Crest, Aghanim's Scepter"
+        : cleanTopMetaNames.slice(0, 4).join(", ");
+
       counterMatrix.push({
         status: "passed",
         category: "Актуальная мета (STRATZ / OpenDota)",
         threat: `Мета-ядро для ${roleInfo.heroName} (${buildArch.archetypeLabel})`,
-        expectedItems: metaProfile.topMetaItemNames.slice(0, 4).join(", "),
+        expectedItems: expectedMetaStr,
         playerResponse: `✓ По мете (${Math.min(100, metaMatchPct)}%): ${(directHeroMetaMatched.length > 0 ? directHeroMetaMatched : metaMatchedItems).map(i => i.name).slice(0, 4).join(", ")}`
       });
     }
   }
 
-  // 10Г. Проверка классических опозданий по таймингам (Battle Fury, Radiance, Blink, Manta, Harpoon, Desolator, Pipe)
+  // Проверка классических опозданий по таймингам
   const delayedItems = [];
   if (Array.isArray(purchaseLog) && purchaseLog.length > 0) {
     for (const [itemKey, rule] of Object.entries(ITEM_TIMING_BENCHMARKS)) {
@@ -2836,8 +3532,14 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
     });
   }
 
-  // Формируем финальный заголовок и подробное описание от Мини-ИИ Оценщика Билдов
-  buildScore = Math.max(12, Math.min(99, Math.round(buildScore)));
+  if (arch === "OFFLANE_TANK_INITIATOR" && hasInitiationSlot && hasTankDefensiveOrTeamSlot && !hasCriticalBuildMistake) {
+    buildScore = Math.max(88, Math.min(98, buildScore));
+    if (buildVerdictStatus === "warning" && delayedItems.length === 0) {
+      buildVerdictStatus = "good";
+    }
+  }
+
+  buildScore = Math.max(15, Math.min(99, Math.round(buildScore)));
   let buildHeadline = "";
   let buildExplanation = "";
 
@@ -2855,15 +3557,15 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
   } else {
     buildHeadline = isExemptByInnateAndMetaDispel
       ? `Мета-сборка на ${roleInfo.heroName}: встроенный сейв + ${metaDispelItemsOwned.map(i => i.name).slice(0, 3).join(", ")}`
-      : `Сборка на ${roleInfo.heroName} соответствует мете и пику врага`;
+      : `Сборка на ${roleInfo.heroName} (${buildArch.archetypeLabel}) соответствует мете и пику врага`;
     buildExplanation = enemyControlHeroes.length > 0
       ? `Ключевые слоты (${richItems.filter(i => i.major).map(i => i.name).slice(0, 4).join(", ") || "по роли"}) взяты адекватно против пика врага (${enemyControlNamesStr}).`
       : "Предметы и тайминги основных слотов соответствуют задачам выбранной позиции.";
   }
 
-  // Сортируем матрицу контр-пика: сначала ошибки (failed), затем предупреждения (warning), затем выполненные (passed)
   const statusOrder = { failed: 0, warning: 1, passed: 2 };
   counterMatrix.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
+  const finalMatrix = counterMatrix.slice(0, 6);
 
   for (const item of richItems) {
     if (item.boughtAt) {
@@ -2881,11 +3583,19 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
   return {
     hasCriticalBuildMistake,
     buildScore,
+    archetypeKey: arch,
     archetypeLabel: buildArch.archetypeLabel,
     isPhysicalRightClicker: buildArch.isPhysicalRightClicker,
+    teamCounters: {
+      teamHasAntiHeal,
+      teamHasNullifier,
+      teamHasAuraSave,
+      teamHasBreak
+    },
+    targetThreatReport,
     auditMode: Array.isArray(purchaseLog) && purchaseLog.length > 0
-      ? "100% Полный AI-аудит (Пик + Все слоты + Тайминги покупок)"
-      : "100% AI-аудит слотов и контр-пика (Пик + Все 60 слотов матча)",
+      ? "100% Полный AI-аудит (Дерево угроз + Slot Efficiency + Тайминги)"
+      : "100% AI-аудит слотов и контр-пика (Дерево угроз + Все 60 слотов)",
     bkbBoughtAtSec,
     bkbBoughtAtStr,
     bkbBoughtAtMin,
@@ -2895,12 +3605,12 @@ function evaluateBuildAndTimings(player, roleInfo, invAudit, mainItems, purchase
     verdictStatus: buildVerdictStatus,
     headline: buildHeadline,
     explanation: buildExplanation,
-    counterMatrix,
+    counterMatrix: finalMatrix,
     itemTimelinePills,
     findings: buildFindings,
     metaProfile: {
       bkbIsPopular: metaProfile.bkbIsPopular,
-      topMetaItemNames: metaProfile.topMetaItemNames,
+      topMetaItemNames: cleanTopMetaNames,
       metaSource: metaProfile.metaSource || "STRATZ / OpenDota Live Meta"
     },
     llmPayload
@@ -3121,10 +3831,174 @@ function resolveBenchmarks(player, roleInfo, durationMin) {
 /**
  * Контекстный аудит каждого замеса (teamfights) v4.2
  */
+// Архетип макро-керри и сплит-пушеров, чья задача до ключевых слотов — толкать линии и ломать базу, а не бежать в ранние драки 5v5
+const SPLIT_PUSH_MACRO_HERO_IDS = new Set([
+  1,   // Anti-Mage
+  10,  // Morphling
+  12,  // Phantom Lancer
+  53,  // Nature's Prophet
+  61,  // Broodmother
+  77,  // Lycan
+  80,  // Lone Druid
+  82,  // Meepo
+  89,  // Naga Siren
+  109, // Terrorblade
+  113  // Arc Warden
+]);
+
+// Плотные силовики, темповые борцы и ганкеры, в которых сплит-пушеру нельзя просто бежать драться в лоб на 15–22 минуте
+const EARLY_BRAWL_AND_CATCH_ENEMY_IDS = new Set([
+  2,   // Axe
+  4,   // Bloodseeker
+  16,  // Sand King
+  17,  // Storm Spirit
+  18,  // Sven
+  19,  // Tiny
+  23,  // Kunkka
+  28,  // Slardar
+  29,  // Tidehunter
+  38,  // Beastmaster
+  42,  // Wraith King
+  47,  // Viper
+  49,  // Dragon Knight
+  51,  // Clockwerk
+  54,  // Lifestealer
+  59,  // Huskar
+  60,  // Night Stalker
+  65,  // Batrider
+  69,  // Doom
+  70,  // Ursa
+  71,  // Spirit Breaker
+  78,  // Brewmaster
+  81,  // Chaos Knight
+  85,  // Undying
+  96,  // Centaur Warrunner
+  98,  // Timbersaw
+  99,  // Bristleback
+  104, // Legion Commander
+  129, // Mars
+  135, // Dawnbreaker
+  137  // Primal Beast
+]);
+
+/**
+ * Минимальный оценщик драфта для макро-керри / сплит-пушеров:
+ * Проверяет, насколько вражеский пик опасен для ранних лобовых драк 5v5 (например Sven + Axe + Spirit Breaker + Undying)
+ */
+function evaluateDraftForSplitPush(playerHeroId, enemyPlayers = []) {
+  const isSplitPushHero = SPLIT_PUSH_MACRO_HERO_IDS.has(Number(playerHeroId));
+  const enemyBrawlers = [];
+  for (const ep of enemyPlayers) {
+    const hId = Number(ep.hero_id);
+    if (EARLY_BRAWL_AND_CATCH_ENEMY_IDS.has(hId)) {
+      const hName = (HEROES_DB[hId] && HEROES_DB[hId].name) || ep.hero_name || `Hero #${hId}`;
+      enemyBrawlers.push(hName);
+    }
+  }
+  return {
+    isSplitPushHero,
+    enemyBrawlers,
+    isHostileEarlyDraft: enemyBrawlers.length >= 2,
+    brawlersSummary: enemyBrawlers.slice(0, 4).join(", ")
+  };
+}
+
+/**
+ * Контекстный аудит каждого замеса (teamfights) с проверкой реального присутствия в бою
+ * (исправлен баг с глобальным xp_delta, из-за которого сплит-пушер на другом конце карты получал "Зажал кнопки")
+ */
+// Список вражеского контроля сквозь BKB и мгновенного дизейбла для проверки "Погиб за контроль до нажатия кнопок"
+const BKB_PIERCING_AND_INSTANT_LOCKDOWN_ABILITIES = {
+  axe_berserkers_call: "Axe (Berserker's Call)",
+  legion_commander_duel: "Legion Commander (Duel)",
+  faceless_void_chronosphere: "Faceless Void (Chronosphere)",
+  enigma_black_hole: "Enigma (Black Hole)",
+  magnataur_reverse_polarity: "Magnus (Reverse Polarity)",
+  bane_fiends_grip: "Bane (Fiend's Grip)",
+  doom_bringer_doom: "Doom (Doom)",
+  pudge_dismember: "Pudge (Dismember)",
+  beastmaster_primal_roar: "Beastmaster (Primal Roar)",
+  batrider_flaming_lasso: "Batrider (Flaming Lasso)",
+  winter_wyvern_winters_curse: "Winter Wyvern (Winter's Curse)",
+  treant_overgrowth: "Treant Protector (Overgrowth)",
+  spirit_breaker_nether_strike: "Spirit Breaker (Nether Strike)",
+  marci_dispose: "Marci (Dispose)",
+  primal_beast_pulverize: "Primal Beast (Pulverize)"
+};
+
+const INSTANT_STUN_OR_SILENCE_ABILITIES = {
+  lion_impale: "Lion (Earth Spike)",
+  lion_voodoo: "Lion (Hex)",
+  shadow_shaman_voodoo: "Shadow Shaman (Hex)",
+  shadow_shaman_shackles: "Shadow Shaman (Shackles)",
+  puck_waning_rift: "Puck (Waning Rift)",
+  puck_dream_coil: "Puck (Dream Coil)",
+  disruptor_static_storm: "Disruptor (Static Storm)",
+  silencer_global_silence: "Silencer (Global Silence)",
+  centaur_hoof_stomp: "Centaur (Hoof Stomp)",
+  slardar_slithereen_crush: "Slardar (Slithereen Crush)",
+  sandking_burrowstrike: "Sand King (Burrowstrike)",
+  tiny_avalanche: "Tiny (Avalanche)",
+  mars_spear: "Mars (Spear of Mars)",
+  rattletrap_hookshot: "Clockwerk (Hookshot)",
+  storm_spirit_electric_vortex: "Storm Spirit (Electric Vortex)",
+  nyx_assassin_impale: "Nyx Assassin (Impale)"
+};
+
+/**
+ * Собирает использованный врагами контроль (сквозь BKB и мгновенные хексы/станы с блинка) в конкретном тимфайте
+ */
+function extractEnemyLockdownInFight(tf, enemyIndices) {
+  const bkbPiercingUsed = [];
+  const instantLockdownUsed = [];
+
+  for (const eIdx of enemyIndices) {
+    const epTf = tf.players && tf.players[eIdx];
+    if (!epTf) continue;
+    const abUses = epTf.ability_uses || {};
+    const itUses = epTf.item_uses || {};
+
+    for (const [abKey, label] of Object.entries(BKB_PIERCING_AND_INSTANT_LOCKDOWN_ABILITIES)) {
+      if ((abUses[abKey] || 0) > 0 && !bkbPiercingUsed.includes(label)) {
+        bkbPiercingUsed.push(label);
+      }
+    }
+    for (const [abKey, label] of Object.entries(INSTANT_STUN_OR_SILENCE_ABILITIES)) {
+      if ((abUses[abKey] || 0) > 0 && !instantLockdownUsed.includes(label)) {
+        instantLockdownUsed.push(label);
+      }
+    }
+    if ((itUses.sheepstick || 0) > 0 && !instantLockdownUsed.includes("Scythe of Vyse (Hex)")) {
+      instantLockdownUsed.push("Scythe of Vyse (Hex)");
+    }
+    if ((itUses.abyssal_blade || 0) > 0 && !bkbPiercingUsed.includes("Abyssal Blade")) {
+      bkbPiercingUsed.push("Abyssal Blade");
+    }
+    if (((itUses.orchid || 0) > 0 || (itUses.bloodthorn || 0) > 0) && !instantLockdownUsed.includes("Orchid/Bloodthorn")) {
+      instantLockdownUsed.push("Orchid/Bloodthorn");
+    }
+  }
+
+  return {
+    bkbPiercingUsed,
+    instantLockdownUsed,
+    allDisablesUsed: [...bkbPiercingUsed, ...instantLockdownUsed]
+  };
+}
+
+/**
+ * Контекстный аудит каждого замеса (teamfights) v6.0:
+ * Различает:
+ * — Сценарий А («Погиб за прокаст/контроль до нажатия кнопок», штраф -35%): в файте враги дали контроль сквозь BKB
+ *   (Call, Duel, Chrono, Black Hole, RP, Grip, Doom и др.) ИЛИ мгновенный хекс/стан, а игрок почти не нажал скиллы и умер за фокус.
+ * — Сценарий Б («Зажал кнопки в проигранном замесе», полный штраф +20 очк.): игрок жил в файте, нажимал другие скиллы
+ *   и наносил урон, но умер, так и не нажав готовый BKB / ульт.
+ */
 function analyzeTeamfightImpact(player, playerIndex, teamfights, purchaseLog, mainItems, roleInfo, isRadiant) {
   const highImpactFights = [];
   const instantBurstWithoutBkbFights = [];
   const passiveObserverFights = [];
+  const lockedDownBeforeButtonsFights = [];
   let totalFightDamage = 0;
 
   if (!Array.isArray(teamfights) || teamfights.length === 0) {
@@ -3132,6 +4006,7 @@ function analyzeTeamfightImpact(player, playerIndex, teamfights, purchaseLog, ma
       highImpactFights,
       instantBurstWithoutBkbFights,
       passiveObserverFights,
+      lockedDownBeforeButtonsFights,
       totalFightDamage: 0,
       turningPointFight: null
     };
@@ -3144,6 +4019,7 @@ function analyzeTeamfightImpact(player, playerIndex, teamfights, purchaseLog, ma
   let turningPointFight = null;
 
   const hasBkbInFinalSlots = mainItems.includes(116);
+  const isSplitPushCarry = SPLIT_PUSH_MACRO_HERO_IDS.has(Number(player.hero_id));
 
   for (const tf of teamfights) {
     const tfStart = tf.start || 0;
@@ -3165,6 +4041,7 @@ function analyzeTeamfightImpact(player, playerIndex, teamfights, purchaseLog, ma
 
     const abUses = pTf.ability_uses || {};
     const itUses = pTf.item_uses || {};
+    const totalOtherAbilitiesPressed = Object.values(abUses).reduce((s, v) => s + Number(v || 0), 0);
 
     const usedUltInFight = roleInfo.bigUlt ? (abUses[roleInfo.bigUlt] || 0) > 0 : false;
     const ultWasReady = Boolean(roleInfo.bigUlt && (tfStart - lastUltUseTime >= roleInfo.ultCd));
@@ -3172,7 +4049,6 @@ function analyzeTeamfightImpact(player, playerIndex, teamfights, purchaseLog, ma
       lastUltUseTime = tfEnd;
     }
 
-    // Порог действительно мощного замеса по урону (только реальный огромный дамаг/хил, без раздачи бейджа за обычные ассисты!)
     const highDmgThreshold = tfStart < 1500 ? 2300 : 3200;
     const isStrongFightImpact =
       dmg >= highDmgThreshold ||
@@ -3199,43 +4075,78 @@ function analyzeTeamfightImpact(player, playerIndex, teamfights, purchaseLog, ma
     const playerReallyHadBkb = hasBkbInFinalSlots && bkbBoughtBeforeFight;
     const pressedBkbInFight = (itUses.black_king_bar || 0) > 0;
 
-    if (!roleInfo.isSupport && deaths > 0 && dmg < 600 && tfStart >= 900 && playerReallyHadBkb && !pressedBkbInFight) {
-      instantBurstWithoutBkbFights.push({
-        time: formatClock(tfStart),
-        timeSec: tfStart,
-        damage: dmg,
-        kills,
-        assists,
-        allyDeaths,
-        missedButtons: ['BKB']
-      });
-    } else if (!roleInfo.isSupport && allyDeaths >= 3 && tfStart >= 900 && !isStrongFightImpact) {
-      const wasPresent = dmg > 0 || deaths > 0 || (pTf.xp_delta || 0) > 0;
-      if (wasPresent) {
+    // Проверяем действия врагов в этом же тимфайте
+    const enemyLockdown = extractEnemyLockdownInFight(tf, enemyIndices);
+    const hasBkbPiercingLockdown = enemyLockdown.bkbPiercingUsed.length > 0;
+    const hasAnyHardEnemyLockdown = enemyLockdown.allDisablesUsed.length > 0;
+
+    const wasActuallyInFightRange = deaths > 0 || dmg >= 350 || kills > 0 || assists > 0;
+    const isSituationalFinisherUlt = Number(player.hero_id) === 1 || Number(player.hero_id) === 2 || Number(player.hero_id) === 36;
+
+    if (!roleInfo.isSupport && wasActuallyInFightRange && tfStart >= 900 && !isStrongFightImpact && (deaths > 0 || allyDeaths >= 3)) {
+      if (!(isSplitPushCarry && deaths === 0 && tfStart < 1500)) {
         const missedInLostFight = [];
         if (ultWasReady && !usedUltInFight && roleInfo.ultLabel) {
-          missedInLostFight.push(roleInfo.ultLabel);
+          if (!isSituationalFinisherUlt || deaths > 0) {
+            missedInLostFight.push(roleInfo.ultLabel);
+          }
+        }
+        if (playerReallyHadBkb && !pressedBkbInFight && (deaths > 0 || dmg >= 450)) {
+          missedInLostFight.push('BKB');
         }
         for (const item of CRITICAL_ACTIVE_ITEMS) {
+          if (item.key === 'black_king_bar') continue;
           if (item.coreOnly && roleInfo.isSupport) continue;
           const hasInFinal = mainItems.includes(item.itemId);
           const boughtBefore = purchaseLog.length > 0
             ? item.variants.some(vKey => purchaseLog.some(p => p.key === vKey && p.time <= tfStart - 10))
             : (tfStart >= 1500 && hasInFinal);
           const pressed = item.variants.some(vKey => (itUses[vKey] || 0) > 0);
-          if (hasInFinal && boughtBefore && !pressed) {
+          if (hasInFinal && boughtBefore && !pressed && (deaths > 0 || dmg >= 450)) {
             missedInLostFight.push(item.label);
           }
         }
 
-        if (missedInLostFight.length > 0 && (dmg < 1100 || (deaths > 0 && dmg < 1800))) {
-          passiveObserverFights.push({
-            time: formatClock(tfStart),
-            timeSec: tfStart,
-            damage: dmg,
-            allyDeaths,
-            missedButtons: [...new Set(missedInLostFight)]
-          });
+        const uniqueMissed = [...new Set(missedInLostFight)];
+        if (uniqueMissed.length > 0 && (dmg < 1200 || (deaths > 0 && dmg < 1850))) {
+          // СЦЕНАРИЙ А: Игрок погиб в этом файте, и враги нажали контроль сквозь BKB (Call, Duel, Chrono, Black Hole, RP, Grip, Doom и др.)
+          // ИЛИ игрок нанес почти 0 урона (< 420 ед., нажал <= 1 скилла) под мгновенным хексом/станом врага
+          const diedInLockdownBeforePressing =
+            deaths > 0 &&
+            (hasBkbPiercingLockdown || (dmg < 420 && totalOtherAbilitiesPressed <= 1 && hasAnyHardEnemyLockdown));
+
+          if (diedInLockdownBeforePressing) {
+            const disableListStr = (hasBkbPiercingLockdown ? enemyLockdown.bkbPiercingUsed : enemyLockdown.allDisablesUsed)
+              .slice(0, 3)
+              .join(', ');
+            lockedDownBeforeButtonsFights.push({
+              time: formatClock(tfStart),
+              timeSec: tfStart,
+              damage: dmg,
+              allyDeaths,
+              missedButtons: uniqueMissed,
+              enemyDisables: disableListStr || 'фокус-контроль с инициации'
+            });
+          } else if (deaths > 0 && dmg < 600 && playerReallyHadBkb && !pressedBkbInFight && !hasBkbPiercingLockdown) {
+            instantBurstWithoutBkbFights.push({
+              time: formatClock(tfStart),
+              timeSec: tfStart,
+              damage: dmg,
+              kills,
+              assists,
+              allyDeaths,
+              missedButtons: uniqueMissed
+            });
+          } else {
+            // СЦЕНАРИЙ Б: Игрок жил в файте, нажимал другие скиллы и наносил урон, но зажал готовый BKB / ульт
+            passiveObserverFights.push({
+              time: formatClock(tfStart),
+              timeSec: tfStart,
+              damage: dmg,
+              allyDeaths,
+              missedButtons: uniqueMissed
+            });
+          }
         }
       }
     }
@@ -3260,16 +4171,24 @@ function analyzeTeamfightImpact(player, playerIndex, teamfights, purchaseLog, ma
     highImpactFights,
     instantBurstWithoutBkbFights,
     passiveObserverFights,
+    lockedDownBeforeButtonsFights,
     totalFightDamage,
     turningPointFight
   };
 }
 
 function buildForensicInsights(playerObj, turningPointFight, matchDurationFormatted) {
-  const { role, stats, teamfight_participation_pct, dmg_share_pct, damage_per_gold, isSupport, high_impact_fights_count, badges, build_audit } = playerObj;
+  const { role, stats, teamfight_participation_pct, dmg_share_pct, tower_share_pct, tower_damage, damage_per_gold, isSupport, high_impact_fights_count, badges, build_audit, items } = playerObj;
 
   let turningPoint;
-  if (turningPointFight) {
+  if (badges.includes('Жертва без байбека')) {
+    const bbReason = (playerObj.reasons || []).find(r => r.category === 'Лейт');
+    turningPoint = {
+      time: bbReason ? bbReason.timestamp : matchDurationFormatted,
+      title: `Критическая смерть без байбека (${bbReason ? bbReason.timestamp : matchDurationFormatted})`,
+      text: `Погиб в лейте при нетворсе ${stats.net_worth.toLocaleString('ru-RU')} 🪙 без выкупа, после чего враги закончили игру.`
+    };
+  } else if (turningPointFight) {
     if (turningPointFight.isHighImpact && turningPointFight.deaths > 0 && (isSupport || damage_per_gold >= 1.0)) {
       turningPoint = {
         time: turningPointFight.time,
@@ -3298,11 +4217,15 @@ function buildForensicInsights(playerObj, turningPointFight, matchDurationFormat
   }
 
   let innocence;
-  if (!isSupport && damage_per_gold < 0.85 && teamfight_participation_pct < 42) {
-    // Честная диагностика для АФК-фармера (вроде Бруды 4/7/3 с 0.66 урона/золото): не хвалим за фейковый урон!
+  if (!isSupport && (tower_damage >= 7000 || (tower_damage >= 4500 && (tower_share_pct || 0) >= 60))) {
     innocence = {
-      title: `Нафармил ${stats.net_worth.toLocaleString('ru-RU')} золота, но не реализовал`,
-      text: `Участие в драках всего ${teamfight_participation_pct}%, а урон на 1 золото — ${damage_per_gold} (фарм не помог команде).`
+      title: `Снес ${tower_share_pct || 70}% строений команды (${tower_damage.toLocaleString('ru-RU')} урона башням)`,
+      text: `Держал макро-игру сплит-пушем и в одиночку создавал давление на вражескую базу.`
+    };
+  } else if (!isSupport && damage_per_gold < 0.85 && teamfight_participation_pct < 42) {
+    innocence = {
+      title: `Нафармил ${stats.net_worth.toLocaleString('ru-RU')} золота, но не реализовал в драках`,
+      text: `Участие в драках всего ${teamfight_participation_pct}%, а урон на 1 золото — ${damage_per_gold} (не хватило импакта по героям).`
     };
   } else if (high_impact_fights_count > 0 && (isSupport || damage_per_gold >= 1.05)) {
     innocence = {
@@ -3327,33 +4250,43 @@ function buildForensicInsights(playerObj, turningPointFight, matchDurationFormat
   }
 
   let lessonAction;
-  if (build_audit && build_audit.hasCriticalBuildMistake) {
+  const actuallyBoughtLinkens = Array.isArray(items) && items.includes(123);
+
+  if (badges.includes('Жертва без байбека') && !isSupport) {
+    lessonAction = 'На первой позиции с огромным нетворсом после 35-й минуты не трать байбек агрессивно и не подставляйся на карте, пока выкуп в кулдауне — одна такая смерть стоит трона.';
+  } else if (build_audit && build_audit.hasCriticalBuildMistake) {
     const failedCounters = Array.isArray(build_audit.counterMatrix)
       ? build_audit.counterMatrix.filter(c => c.status === "failed")
       : [];
     if (failedCounters.some(c => c.category.includes("Nullifier"))) {
-      lessonAction = "Против 2–3 Eul's Scepter / Ghost Scepter / Glimmer обязательно бери Nullifier 3–4 слотом, иначе враги сбрасывают фокус и Omnislash.";
+      lessonAction = "На физ-керри против Eul's Scepter / Ghost Scepter / Glimmer / Force Staff обязательно собирай Nullifier 3–4 слотом, чтобы цели не уходили из-под фокуса.";
     } else if (failedCounters.some(c => c.category.includes("MKB"))) {
       lessonAction = "Против Butterfly или встроенного уклонения (PA / WR / Arc Warden) райткликер обязан покупать Monkey King Bar (True Strike).";
+    } else if (failedCounters.some(c => c.category.includes("Сейв-слоты саппорта"))) {
+      lessonAction = "На 4 и 5 позиции всегда собирай минимум один сейв-предмет (Force Staff, Glimmer Cape, Solar Crest, Lotus Orb) до покупки жадных слотов в урон.";
     } else if (failedCounters.some(c => c.category.includes("Break"))) {
-      lessonAction = "Против Bristleback, Spectre, Huskar или Timbersaw обязательно собирай Silver Edge для отключения пассивок (Break).";
+      lessonAction = "Против Bristleback, Spectre или Timbersaw обязательно собирай Silver Edge для отключения пассивок (Break).";
     } else if (failedCounters.some(c => c.category.includes("Анти-хил"))) {
-      lessonAction = "Против героев с сильным регеном/вампиризмом (Huskar, Morphling, Alchemist, Satanic, Heart) покупай Eye of Skadi, Shiva's Guard или Spirit Vessel.";
+      lessonAction = "Против героев с сильным регеном/вампиризмом (Huskar, Morphling, Alchemist, Satanic, Heart) покупай Spirit Vessel, Shiva's Guard или Eye of Skadi.";
     } else if (build_audit.bkbBoughtAtMin) {
       lessonAction = `Против пика с контролем бери BKB 2-м или 3-м слотом (~20–23 мин), а не на ${build_audit.bkbBoughtAtMin}-й минуте после слотов на голый урон.`;
     } else {
       lessonAction = "Адаптируй сборку под конкретный пик и предметы врага (BKB против контроля, MKB против уклонения, Nullifier против сейвов).";
     }
-  } else if (build_audit && build_audit.verdictStatus === 'empty_networth') {
+  } else if (build_audit && build_audit.verdictStatus === 'empty_networth' && actuallyBoughtLinkens) {
     lessonAction = "Оценивай скиллы врагов перед покупкой защитного слота: не бери Linken's Sphere против AoE-контроля или дешевых сбивалок.";
+  } else if (badges.includes('Пойман в контроль до БКБ')) {
+    lessonAction = 'Держи позицию до врыва вражеского инициатора (Axe / LC / Magnus / Void) и не показывайся на линии до того, как увидишь опасный контроль сквозь BKB.';
   } else if (badges.includes('Умер в стане с БКБ') || badges.includes('Хранитель кнопок')) {
     lessonAction = 'Жми BKB превентивно до влета вражеского контроля.';
   } else if (badges.includes('Жертва без байбека')) {
-    lessonAction = 'После 35-й минуты всегда оставляй золото на выкуп.';
+    lessonAction = 'После 35-й минуты всегда оставляй золото и кулдаун на выкуп для защиты базы.';
+  } else if (!isSupport && tower_damage >= 7000 && damage_per_gold < 0.88) {
+    lessonAction = 'Отличный сплит-пуш по вышкам, но после набора 4–5 слотов чаще конвертируй перефарм в командные драки 5 на 5, чтобы не отдавать врагу инициативу.';
   } else if (badges.includes('Пацифист строений') || badges.includes('Инвестор в лес')) {
     lessonAction = 'Не застревай в АФК-фарме: на кор-позиции нужно давить вышки и драться с командой.';
   } else if (role.includes('Pos 1') || role.includes('Pos 2')) {
-    lessonAction = 'Реализуй тайминги ключевых слотов через командные драки.';
+    lessonAction = 'Реализуй тайминги ключевых слотов через командные драки и контроль Рошана.';
   } else {
     lessonAction = 'Держи позицию за спинами коров и обновляй вижен перед смоками.';
   }
@@ -3362,7 +4295,7 @@ function buildForensicInsights(playerObj, turningPointFight, matchDurationFormat
 }
 
 /**
- * Полный расчет метрик и коротких карточек улик для одного игрока (v4.2)
+ * Полный расчет метрик, баланса ролей (Коры vs Саппорты), динамической амнистии и карточек улик (v6.0)
  */
 function evaluatePlayer(player, playerIndex, matchContext) {
   const {
@@ -3372,6 +4305,7 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     teamKills,
     teamDamage,
     teamPlayers,
+    enemyPlayers,
     teamfights,
     ranksAt10,
     ranksAt20,
@@ -3399,9 +4333,20 @@ function evaluatePlayer(player, playerIndex, matchContext) {
 
   const heroDamage = player.hero_damage || 0;
   const towerDamage = player.tower_damage || 0;
+  const heroHealing = player.hero_healing || 0;
+  const teamTowerDamage = Math.max(1, (teamPlayers || []).reduce((s, p) => s + (p.tower_damage || 0), 0));
+  const tower_share_pct = Math.min(100, Math.round((towerDamage / teamTowerDamage) * 100));
+
   const dmg_share_pct = Number(((heroDamage / Math.max(1, teamDamage)) * 100).toFixed(1));
   const damage_per_death = Math.round(heroDamage / Math.max(1, deaths));
   const damage_per_gold = Number((heroDamage / totalGold).toFixed(2));
+
+  const draftSplitInfo = evaluateDraftForSplitPush(player.hero_id, enemyPlayers);
+  const isHeavySplitPushCarry =
+    !roleInfo.isSupport &&
+    (towerDamage >= 7500 ||
+      (towerDamage >= 4800 && tower_share_pct >= 55) ||
+      (draftSplitInfo.isSplitPushHero && towerDamage >= 4000));
 
   const mainItems = [
     player.item_0, player.item_1, player.item_2,
@@ -3454,16 +4399,15 @@ function evaluatePlayer(player, playerIndex, matchContext) {
   const networth_preservation_pct = Math.min(100, Math.round((netWorth / totalGold) * 100));
   const { gpmPct, xpmPct, hdPct, tdPct, hhPct, stunsPct } = resolveBenchmarks(player, roleInfo, durationMin);
 
-  // ИСПРАВЛЕНО v4.2: Если кор-герой АФК фармил крипов, но нанес мало урона за золото (damage_per_gold < 0.85),
-  // его высокий GPM/XPM больше НЕ завышает ему перцентиль полезности на герое!
-  const isAfkFarmingCore = !roleInfo.isSupport && damage_per_gold < 0.88 && teamfight_participation_pct < 45;
+  const isAfkFarmingCore = !roleInfo.isSupport && !isHeavySplitPushCarry && towerDamage < 3500 && damage_per_gold < 0.88 && teamfight_participation_pct < 45;
   const isHighFightingCore = !roleInfo.isSupport && (teamfight_participation_pct >= 55 || dmg_share_pct >= 24) && hdPct >= 0.50;
 
   let compositePct;
   if (roleInfo.isSupport) {
     compositePct = Math.max(hdPct * 0.35 + xpmPct * 0.25 + Math.max(hhPct, stunsPct, rawTfp) * 0.40, rawTfp * 0.85);
+  } else if (isHeavySplitPushCarry) {
+    compositePct = tdPct * 0.40 + gpmPct * 0.25 + hdPct * 0.25 + xpmPct * 0.10;
   } else if (isAfkFarmingCore) {
-    // Для АФК-кора (например Бруды с 0.66 урон/золото и 1022 урона башням) считаем строго по боевому импакту и башням!
     compositePct = hdPct * 0.45 + tdPct * 0.30 + rawTfp * 0.25;
   } else if (roleInfo.isSpellcaster || isHighFightingCore) {
     compositePct = hdPct * 0.55 + gpmPct * 0.25 + xpmPct * 0.20;
@@ -3483,25 +4427,20 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     isRadiant
   );
 
-  // ИСПРАВЛЕНО v4.2: Бонус «Боец до последнего» (hasHighDamageSacrifice) на кор-роли (Pos 1–3)
-  // НЕВОЗМОЖЕН, если за весь матч у игрока низкий Damage per Gold (< 1.05) или низкое участие в драках (< 45%)!
-  // Поэтому Бруда (Урон/Золото 0.66, Драки 35%, Урон 11.7k) НИКОГДА не получит бонус за один случайный файт на 33:06!
-  // ИСПРАВЛЕНО v4.3:
-  // 1) Если кор совершил критическую ошибку билда (buildAudit.hasCriticalBuildMistake — например Kez купил BKB только на 40-й минуте!),
-  //    он НЕ получает иммунитет «Боец до последнего», потому что его жадный билд без BKB слил мидгейм!
-  // 2) Саппорты с 12+ смертями (например Spirit Breaker 7/16/17) НЕ получают «Боец до последнего» и не освобождаются от штрафа за фид!
+  const kaRatioForCredit = (kills + assists) / Math.max(1, deaths);
   const qualifiesForCoreFightCredit =
     !roleInfo.isSupport &&
     !buildAudit.hasCriticalBuildMistake &&
-    damage_per_gold >= 1.05 &&
-    teamfight_participation_pct >= 45 &&
-    dmg_share_pct >= 20 &&
-    (tfAudit.highImpactFights.length >= 2 || (tfAudit.highImpactFights.length >= 1 && dmg_share_pct >= 25));
+    ((damage_per_gold >= 1.05 &&
+      teamfight_participation_pct >= 45 &&
+      dmg_share_pct >= 20 &&
+      (tfAudit.highImpactFights.length >= 2 || (tfAudit.highImpactFights.length >= 1 && dmg_share_pct >= 25))) ||
+     (kills >= 12 && kaRatioForCredit >= 2.0 && (teamfight_participation_pct >= 42 || dmg_share_pct >= 22)));
 
   const qualifiesForSupportFightCredit =
     roleInfo.isSupport &&
-    deaths <= 11 &&
-    teamfight_participation_pct >= 58 &&
+    deaths <= 10 &&
+    teamfight_participation_pct >= 60 &&
     tfAudit.highImpactFights.length >= 2 &&
     dmg_share_pct >= 18;
 
@@ -3513,9 +4452,13 @@ function evaluatePlayer(player, playerIndex, matchContext) {
   let economyScore = 0;   // макс 35
   let gameplayScore = 0;  // макс 40
   let benchmarkScore = 0; // макс 25
-  let supportAmnesty = 0; // 0..15
+  let supportAmnesty = 0; // 0..18
   let timelineScore = 0;  // макс 60
   let sabotageScore = 0;
+
+  let macroAmnestyPts = 0;
+  let combatAmnestyPts = 0;
+  let supportUtilityAmnestyPts = 0;
 
   function addPenalty(categoryKey, maxCap, rawPoints, reasonObj) {
     if (rawPoints <= 0) return;
@@ -3532,14 +4475,13 @@ function evaluatePlayer(player, playerIndex, matchContext) {
       timelineScore = Math.min(maxCap, timelineScore + fullPts);
     }
 
-    // Карточка улики ВСЕГДА отображает свой реальный вес штрафа (например +22 за игнор BKB, а не огрызок +1 от лимита полоски!)
     reasons.push({
       ...reasonObj,
       points: fullPts
     });
   }
 
-  const softScale = wonMatch ? 0.65 : 1.0;
+  const softScale = wonMatch ? 0.40 : 1.0;
 
   // =========================================================================
   // 1. ЭКОНОМИКА И ИНВЕНТАРЬ (Макс 35)
@@ -3571,6 +4513,10 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     }
   }
 
+  if (invAudit.isTrollOrAbsurdBuild) {
+    sabotageScore += 45;
+  }
+
   if (invAudit.isSeverelyUndergeared && sabotageScore === 0) {
     badges.push('Пустой инвентарь');
     const gearPts = Math.round(Math.min(18, 10 + Math.max(0, invAudit.nwDeficitPct - 20) * 0.3) * softScale);
@@ -3586,35 +4532,46 @@ function evaluatePlayer(player, playerIndex, matchContext) {
 
   if (!roleInfo.isSupport && durationMin >= 20) {
     if (damage_per_gold < 0.88) {
-      const dpgPts = Math.min(22, Math.round((12 + (0.90 - damage_per_gold) * 25) * softScale));
-      addPenalty('economy', 35, dpgPts, {
-        type: 'ballast',
-        category: 'Фарм',
-        timestamp: 'Весь матч',
-        title: 'Фармил впустую (мало урона за золото)',
-        shortPill: `${damage_per_gold} урона на 1 🪙`,
-        detail: `Нанес всего ${heroDamage.toLocaleString('ru-RU')} урона при ${totalGold.toLocaleString('ru-RU')} заработанного золота.`
-      });
-    }
+      if (isHeavySplitPushCarry) {
+        const splitDpgPts = Math.min(16, Math.round((10 + (0.88 - damage_per_gold) * 20) * softScale));
+        addPenalty('economy', 35, splitDpgPts, {
+          type: 'ballast',
+          category: 'Реализация нетворса',
+          timestamp: 'Весь матч',
+          title: `Низкая реализация огромного нетворса в тимфайтах (${damage_per_gold} урон/🪙)`,
+          shortPill: `${heroDamage.toLocaleString('ru-RU')} урона при ${netWorth.toLocaleString('ru-RU')} NW`,
+          detail: `Забрал огромную долю ресурсов карты (${lastHitsReal} крипов, ${gpm} GPM) и отлично давил башни (${towerDamage.toLocaleString('ru-RU')} TD), но нанес мало урона по вражеским героям в драках (${heroDamage.toLocaleString('ru-RU')}).`
+        });
+      } else {
+        const dpgPts = Math.min(22, Math.round((12 + (0.90 - damage_per_gold) * 25) * softScale));
+        addPenalty('economy', 35, dpgPts, {
+          type: 'ballast',
+          category: 'Фарм',
+          timestamp: 'Весь матч',
+          title: 'Фармил впустую (мало урона за золото)',
+          shortPill: `${damage_per_gold} урона на 1 🪙`,
+          detail: `Нанес всего ${heroDamage.toLocaleString('ru-RU')} урона при ${totalGold.toLocaleString('ru-RU')} заработанного золота.`
+        });
 
-    // Бейдж «Инвестор в лес» выдается либо за высокий % леса (>= 50%), либо если кор набил 220+ крипов с низким уроном (< 0.80 урон/золото) и не участвовал в драках (< 42%)
-    if ((jungle_farm_pct >= 50 || (lastHitsReal >= 220 && teamfight_participation_pct < 42)) && damage_per_gold < 0.88) {
-      badges.push('Инвестор в лес');
-      const jPts = Math.round(14 * softScale);
-      addPenalty('economy', 35, jPts, {
-        type: 'ballast',
-        category: 'Лес',
-        timestamp: 'АФК-фарм',
-        title: 'Всю игру бил крипов вместо игры с командой',
-        shortPill: `${lastHitsReal} крипов • ${damage_per_gold} урон/🪙`,
-        detail: `Добил ${lastHitsReal} крипов (${jungle_farm_pct}% в лесу), но конвертировал фарм лишь в ${heroDamage.toLocaleString('ru-RU')} урона.`
-      });
+        if (towerDamage < 3800 && (jungle_farm_pct >= 50 || (lastHitsReal >= 220 && teamfight_participation_pct < 42))) {
+          badges.push('Инвестор в лес');
+          const jPts = Math.round(14 * softScale);
+          addPenalty('economy', 35, jPts, {
+            type: 'ballast',
+            category: 'Лес',
+            timestamp: 'АФК-фарм',
+            title: 'Всю игру бил лесных крипов без урона и без пуша',
+            shortPill: `${lastHitsReal} крипов • ${damage_per_gold} урон/🪙`,
+            detail: `Добил ${lastHitsReal} крипов (${jungle_farm_pct}% в лесу), но не сломал башни (${towerDamage.toLocaleString('ru-RU')} TD) и дал лишь ${heroDamage.toLocaleString('ru-RU')} урона.`
+          });
+        }
+      }
     }
   }
 
   const maxHoardedGold = Math.max(player.gold ?? 0, player.unspent_gold ?? 0, player.max_unspent_gold || 0);
   const isSixSlotted = mainItems.length >= 6 && netWorth >= 25000;
-  if (maxHoardedGold > 4500 && !isSixSlotted) {
+  if (!wonMatch && maxHoardedGold > 4500 && !isSixSlotted) {
     const hoardPts = Math.round(Math.min(18, 12 + ((maxHoardedGold - 4500) / 1000) * 2) * softScale);
     addPenalty('economy', 35, hoardPts, {
       type: 'ballast',
@@ -3626,7 +4583,6 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     });
   }
 
-  // Применяем вердикты «Оценщика билда и таймингов против пика врага»
   for (const finding of buildAudit.findings) {
     if (finding.badge && !badges.includes(finding.badge)) {
       badges.push(finding.badge);
@@ -3635,7 +4591,6 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     addPenalty(finding.categoryKey, finding.maxCap, scaledPts, finding.reason);
   }
 
-  // Детектор «Позиция 6 (🌲 Лесник с 0-й минуты)»: если 4-я или 5-я позиция бросила линию и ушла фармить лес
   if (roleInfo.isJungler) {
     if (!badges.includes('🌲 Лесник (Pos 6)')) {
       badges.unshift('🌲 Лесник (Pos 6)');
@@ -3652,34 +4607,56 @@ function evaluatePlayer(player, playerIndex, matchContext) {
   }
 
   // =========================================================================
-  // 2. ИМПАКТ В ДРАКАХ И ДАВЛЕНИЕ НА БАШНИ (Макс 40)
+  // 2. ИМПАКТ В ДРАКАХ, ФИД И ВИЖЕН САППОРТОВ (Макс 40)
   // =========================================================================
   const deathsPerMin = deaths / Math.max(1, durationMin);
   const kaRatio = (kills + assists) / Math.max(1, deaths);
 
   const justifiedDeathsCount = hasHighDamageSacrifice ? tfAudit.highImpactFights.filter(f => f.deaths > 0).length : 0;
   const effectiveUnjustifiedDeaths = Math.max(0, deaths - justifiedDeathsCount);
+  const maxEnemyKills = Math.max(0, ...(enemyPlayers || []).map(ep => ep.kills || 0));
 
-  if (effectiveUnjustifiedDeaths >= 14 && deathsPerMin >= 0.42 && kaRatio < 0.55 && !hasHighDamageSacrifice) {
-    const feedPts = Math.min(85, Math.round(55 + (deathsPerMin - 0.40) * 90));
+  const isCoreFeeder = !roleInfo.isSupport && deaths >= 12 && kills <= deaths * 0.58;
+  const isSupportHeavyFeeder = roleInfo.isSupport && deaths >= 11 && (deathsPerMin >= 0.28 || kaRatio < 1.35);
+
+  if (effectiveUnjustifiedDeaths >= 14 && deathsPerMin >= 0.40 && (kaRatio < 0.65 || (!roleInfo.isSupport && kills <= 5 && deaths >= 16)) && !hasHighDamageSacrifice) {
+    const feedPts = Math.min(85, Math.round(55 + (deathsPerMin - 0.38) * 90));
     sabotageScore += feedPts;
+    badges.push('Раскормил врага');
     addPenalty('gameplay', 40, 40, {
       type: 'sabotage',
       category: 'Фид',
       timestamp: 'Весь матч',
-      title: 'Намеренный фид по кд',
+      title: `Жесткий фид и сноубол врага (счет ${kills}/${deaths}/${assists})`,
       shortPill: `${deaths} смертей (${deathsPerMin.toFixed(2)}/мин)`,
-      detail: `Погиб ${deaths} раз за ${Math.round(durationMin)} мин без помощи команде.`
+      detail: `Погиб ${deaths} раз за ${Math.round(durationMin)} мин при всего ${kills} фрагах, подарив вражеским корам критический перевес.`
     });
-  } else if (!hasHighDamageSacrifice && ((effectiveUnjustifiedDeaths >= 11 && deathsPerMin >= 0.28 && kaRatio < 1.25) || (effectiveUnjustifiedDeaths >= 14 && deathsPerMin >= 0.32))) {
-    const softFeedPts = Math.round(Math.min(20, Math.max(8, (effectiveUnjustifiedDeaths - 9) * 3)) * softScale);
+  } else if (!hasHighDamageSacrifice && (
+    isCoreFeeder ||
+    isSupportHeavyFeeder ||
+    (effectiveUnjustifiedDeaths >= 10 && deathsPerMin >= 0.27 && kaRatio < 1.35) ||
+    (effectiveUnjustifiedDeaths >= 13 && deathsPerMin >= 0.29)
+  )) {
+    const baseFeedPts = isCoreFeeder
+      ? Math.min(38, Math.max(24, 20 + (effectiveUnjustifiedDeaths - 10) * 3.5 + (maxEnemyKills >= 18 ? 4 : 0)))
+      : isSupportHeavyFeeder
+        ? Math.min(34, Math.max(18, 16 + (effectiveUnjustifiedDeaths - 9) * 3.2))
+        : Math.min(32, Math.max(12, (effectiveUnjustifiedDeaths - 8) * 3.2));
+    const softFeedPts = Math.round(baseFeedPts * softScale);
+    if (deaths >= 12 && !badges.includes('Раскормил врага')) {
+      badges.push('Раскормил врага');
+    }
     addPenalty('gameplay', 40, softFeedPts, {
       type: 'ballast',
       category: 'Смерти',
       timestamp: 'По ходу игры',
-      title: `Слишком много смертей (${deaths} за игру)`,
+      title: isCoreFeeder
+        ? `Провальный счет на кор-роли (${kills}/${deaths}/${assists}) и раскорм врага`
+        : isSupportHeavyFeeder
+          ? `Фид без размена на саппорте (${kills}/${deaths}/${assists})`
+          : `Слишком много смертей (${deaths} за игру)`,
       shortPill: `Счет ${kills}/${deaths}/${assists}`,
-      detail: `Умирал без выгодного размена (средний урон за жизнь: ${damage_per_death.toLocaleString('ru-RU')}).`
+      detail: `Умирал без выгодного размена (средний урон за жизнь: ${damage_per_death.toLocaleString('ru-RU')})${maxEnemyKills >= 18 ? `, позволив вражескому кору набрать ${maxEnemyKills} фрагов` : ''}.`
     });
   }
 
@@ -3695,8 +4672,6 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     });
   }
 
-  // ИСПРАВЛЕНО v4.2: Проверка на уклонение от драк и АФК-игру на кор-ролях (Pos 1–3)
-  // Ловит коров вроде Бруды с Драками 35%, Уроном 11.7k (0.66 урон/золото) и Тавер-дамагом 1022!
   const minExpectedTowerDmg = roleInfo.isPusher ? 2500 : 1500;
   if (!roleInfo.isSupport && !hasHighDamageSacrifice && durationMin >= 20) {
     if (teamfight_participation_pct < 42 && towerDamage < minExpectedTowerDmg) {
@@ -3709,7 +4684,7 @@ function evaluatePlayer(player, playerIndex, matchContext) {
         shortPill: `Драки ${teamfight_participation_pct}% • Башни ${towerDamage.toLocaleString('ru-RU')}`,
         detail: `На позиции «${roleInfo.roleLabel}» пропустил ${100 - teamfight_participation_pct}% фрагов команды и не сломал вышки.`
       });
-    } else if (teamfight_participation_pct < 40 && damage_per_gold < 0.90) {
+    } else if (teamfight_participation_pct < 38 && damage_per_gold < 0.90 && !isHeavySplitPushCarry) {
       addPenalty('gameplay', 40, Math.round(16 * softScale), {
         type: 'ballast',
         category: 'Драки',
@@ -3718,19 +4693,37 @@ function evaluatePlayer(player, playerIndex, matchContext) {
         shortPill: `Драки ${teamfight_participation_pct}% • Урон ${dmg_share_pct}%`,
         detail: `Редко подключался к боям и внес лишь ${heroDamage.toLocaleString('ru-RU')} урона.`
       });
+    } else if (isHeavySplitPushCarry && teamfight_participation_pct < 34 && durationMin >= 35 && !wonMatch) {
+      const draftExcuse = draftSplitInfo.isHostileEarlyDraft
+        ? ` (против плотного пика ${draftSplitInfo.brawlersSummary} сплит-пуш в мидгейме был оправдан, но в лейте команде не хватило урона 5v5)`
+        : '';
+      addPenalty('gameplay', 40, Math.round(8 * softScale), {
+        type: 'ballast',
+        category: 'Баланс сплита и драк',
+        timestamp: 'Лейт-гейм',
+        title: `Перекос в сплит-пуш при низком участии в драках (${teamfight_participation_pct}%)`,
+        shortPill: `Драки ${teamfight_participation_pct}% • Снес ${tower_share_pct}% башен`,
+        detail: `Отлично давил линии (${towerDamage.toLocaleString('ru-RU')} урона башням), но поучаствовал лишь в ${teamfight_participation_pct}% фрагов команды${draftExcuse}.`
+      });
     }
   }
 
-  // ИСПРАВЛЕНО v4.3: Если физический кор (Pos 1–3) собрал Desolator (#168) или 20 000+ золота, но за 32+ минуты
-  // нанес менее 700 урона башням (как Kez с Desolator, 27.3k NW и всего 320 урона башням за 46 минут!),
-  // он получает штраф за полное игнорирование построек (играл на KDA без сноса базы)!
+  const isActivelyFightingCarry = kills >= 12 && kaRatio >= 1.75;
   const hasDesolatorOrHugeNw = mainItems.includes(168) || netWorth >= 20000;
-  const zeroObjectivesWithTopGear = !roleInfo.isSupport && !roleInfo.isSpellcaster && durationSec >= 1920 && towerDamage < 700 && hasDesolatorOrHugeNw;
+  const zeroObjectivesWithTopGear =
+    !roleInfo.isSupport &&
+    !roleInfo.isSpellcaster &&
+    !isActivelyFightingCarry &&
+    durationSec >= 1920 &&
+    towerDamage < 700 &&
+    hasDesolatorOrHugeNw &&
+    teamfight_participation_pct < 48;
 
   const isExemptFromTowerPenalty =
     roleInfo.isSupport ||
     roleInfo.isSpellcaster ||
-    (!zeroObjectivesWithTopGear && (hasHighDamageSacrifice || (teamfight_participation_pct >= 50 && damage_per_gold >= 1.15)));
+    isActivelyFightingCarry ||
+    (!zeroObjectivesWithTopGear && (hasHighDamageSacrifice || (teamfight_participation_pct >= 50 && damage_per_gold >= 1.10)));
 
   const towerThresholdForBadge = roleInfo.isPusher ? 2200 : 1200;
   if (!isExemptFromTowerPenalty && durationSec > 1800 && towerDamage < towerThresholdForBadge) {
@@ -3752,6 +4745,27 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     });
   }
 
+  // ПУНКТ 4: Сценарий А (Погиб за контроль до нажатия кнопок — штраф снижен на 35%) vs Сценарий Б (Реально зажал кнопки — +20 очк.)
+  if (tfAudit.lockedDownBeforeButtonsFights.length > 0) {
+    badges.push('Пойман в контроль до БКБ');
+    const lockCount = tfAudit.lockedDownBeforeButtonsFights.length;
+    const firstLock = tfAudit.lockedDownBeforeButtonsFights[0];
+    // Базовый штраф 20 очков снижен на 35% -> 13 очков за 1 раз (до 18 за повторные)
+    const rawLockPts = Math.round((20 + (lockCount - 1) * 6) * 0.65);
+    const lockPts = Math.round(Math.min(18, rawLockPts) * softScale);
+    const allTimesStr = tfAudit.lockedDownBeforeButtonsFights.map(f => f.time).join(', ');
+    const buttonsStr = firstLock.missedButtons.join(' + ');
+
+    addPenalty('gameplay', 40, lockPts, {
+      type: 'ballast',
+      category: 'Позиционка в драке',
+      timestamp: firstLock.time,
+      title: `Погиб за прокаст/контроль до нажатия кнопок (${allTimesStr})`,
+      shortPill: `Контроль: ${firstLock.enemyDisables}`,
+      detail: `Попал под фокус/контроль (${firstLock.enemyDisables}) и погиб, не успев нажать готовые кнопки: ${buttonsStr}. Ошибка позиционки до врыва.`
+    });
+  }
+
   if (tfAudit.instantBurstWithoutBkbFights.length > 0) {
     badges.push('Умер в стане с БКБ');
     const burstCount = tfAudit.instantBurstWithoutBkbFights.length;
@@ -3770,10 +4784,12 @@ function evaluatePlayer(player, playerIndex, matchContext) {
 
   if (tfAudit.passiveObserverFights.length > 0) {
     const obsCount = tfAudit.passiveObserverFights.length;
-    const fightPts = Math.round(Math.min(24, 14 + (obsCount - 1) * 6) * softScale);
+    // Сценарий Б: Реально зажал кнопки в замесе (+20 очков базово)
+    const fightPts = Math.round(Math.min(26, 20 + (obsCount - 1) * 6) * softScale);
     if (obsCount + tfAudit.instantBurstWithoutBkbFights.length >= 2) {
       badges.push('Хранитель кнопок');
     }
+    const timesOnly = tfAudit.passiveObserverFights.map(f => f.time).join(', ');
     const shortList = tfAudit.passiveObserverFights
       .map(f => `${f.time} (${f.missedButtons.join(' + ')})`)
       .join(', ');
@@ -3782,22 +4798,32 @@ function evaluatePlayer(player, playerIndex, matchContext) {
       type: 'ballast',
       category: 'Драки',
       timestamp: tfAudit.passiveObserverFights[0].time,
-      title: `Зажал кнопки в проигранном замесе (${obsCount} раз)`,
+      title: `Зажал кнопки в проигранном замесе (${timesOnly})`,
       shortPill: shortList,
-      detail: `Команда потеряла 3+ героев, пока в запасе остались готовые кнопки: ${shortList}.`
+      detail: `Жил в файте, нажимал другие способности и наносил урон, но умер, так и не нажав готовые кнопки: ${shortList}.`
     });
   }
 
-  if (roleInfo.isSupport && matchIsParsed && !wardsIsEstimated && durationMin >= 20 && wardsPlaced <= 2) {
+  // Провал вижена на саппортах (Pos 4 / Pos 5)
+  const minAcceptableWards = roleInfo.position === 5
+    ? Math.max(5, Math.round(durationMin * 0.25))
+    : Math.max(3, Math.round(durationMin * 0.14));
+
+  if (roleInfo.isSupport && matchIsParsed && !wardsIsEstimated && durationMin >= 20 && wardsPlaced < minAcceptableWards) {
     badges.push('Саппорт без вардов');
-    addPenalty('gameplay', 40, Math.round(14 * softScale), {
+    const visionPenalty = wardsPlaced <= 2 ? 18 : 13;
+    addPenalty('gameplay', 40, Math.round(visionPenalty * softScale), {
       type: 'ballast',
       category: 'Вижен',
       timestamp: 'Обзор карты',
-      title: 'Не ставил варды на саппорте',
-      shortPill: `Вардов: ${wardsPlaced}`,
-      detail: `За ${Math.round(durationMin)} мин на позиции поддержки поставил всего ${wardsPlaced} вардов.`
+      title: `Провал вижена на саппорте (всего ${wardsPlaced} вардов за ${Math.round(durationMin)} мин)`,
+      shortPill: `Вардов/Сентри: ${wardsPlaced} (норма >= ${minAcceptableWards})`,
+      detail: `За ${Math.round(durationMin)} мин на позиции «${roleInfo.roleLabel}» поставил критически мало обсерверов и сентри (${wardsPlaced}), оставив команду играть в темноте.`
     });
+  }
+
+  if (isHeavySplitPushCarry && (towerDamage >= 10000 || (towerDamage >= 6000 && tower_share_pct >= 70))) {
+    gameplayScore = Math.min(22, gameplayScore);
   }
 
   // =========================================================================
@@ -3859,7 +4885,7 @@ function evaluatePlayer(player, playerIndex, matchContext) {
           timestamp: formatClock(deathTime),
           title: 'Погиб без байбека перед падением трона',
           shortPill: shortCause,
-          detail: `Смерть на ${formatClock(deathTime)} оставила команду 4v5 в финальной защите базы.`
+          detail: `Критическая смерть на ${formatClock(deathTime)} при нетворсе ${netWorth.toLocaleString('ru-RU')} 🪙 оставила команду 4v5 в финальной защите базы.`
         });
       }
     }
@@ -3878,7 +4904,7 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     }
   }
   if (maxDeathsIn5Min >= 3) {
-    const tiltPts = Math.round(Math.min(20, 14 + (maxDeathsIn5Min - 3) * 3) * softScale);
+    const tiltPts = Math.round(Math.min(24, 15 + (maxDeathsIn5Min - 3) * 3.5) * softScale);
     addPenalty('timeline', 60, tiltPts, {
       type: 'ballast',
       category: 'Лайнинг',
@@ -3886,6 +4912,26 @@ function evaluatePlayer(player, playerIndex, matchContext) {
       title: `Слил старт линии (${maxDeathsIn5Min} смерти за 5 мин)`,
       shortPill: `Отрезок ${tiltWindowStr}`,
       detail: `Погиб ${maxDeathsIn5Min} раза подряд до 12-й минуты, раскормив врага.`
+    });
+  } else if (!hasHighDamageSacrifice && !roleInfo.isSupport && deaths >= 12 && kills <= deaths * 0.58 && (invAudit.nwDeficitPct >= 10 || deathsPerMin >= 0.29 || maxEnemyKills >= 16)) {
+    const collapsePts = Math.round(Math.min(30, 18 + Math.max(0, deaths - 11) * 3) * softScale);
+    addPenalty('timeline', 60, collapsePts, {
+      type: 'ballast',
+      category: 'Провал линии и темпа',
+      timestamp: '00:00–25:00',
+      title: `Провалил свою линию и раскормил вражеского кора (${kills}/${deaths}/${assists})`,
+      shortPill: `Смертей: ${deaths}${maxEnemyKills >= 16 ? ` • У вражеского кора ${maxEnemyKills} киллов` : ` • Дефицит золота: ${Math.max(12, invAudit.nwDeficitPct)}%`}`,
+      detail: `На позиции «${roleInfo.roleLabel}» погиб ${deaths} раз при ${kills} убийствах (${netWorth.toLocaleString('ru-RU')} 🪙), позволив вражескому кору засноуболить карту.`
+    });
+  } else if (!hasHighDamageSacrifice && roleInfo.isSupport && deaths >= 13 && deathsPerMin >= 0.31 && kaRatio < 1.30) {
+    const supFeedTimePts = Math.round(Math.min(24, 15 + (deaths - 12) * 2.5) * softScale);
+    addPenalty('timeline', 60, supFeedTimePts, {
+      type: 'ballast',
+      category: 'Серийный фид',
+      timestamp: 'По ходу матча',
+      title: `Непрерывные отдачи по карте на саппорте (${deaths} смертей за матч)`,
+      shortPill: `${deathsPerMin.toFixed(2)} смертей/мин • Счет ${kills}/${deaths}/${assists}`,
+      detail: `Погиб ${deaths} раз за ${Math.round(durationMin)} мин без позиционки и размена, постоянно оставляя команду в меньшинстве.`
     });
   }
 
@@ -3905,9 +4951,9 @@ function evaluatePlayer(player, playerIndex, matchContext) {
   }
 
   // =========================================================================
-  // 4. ОТЫГРЫШ НА ГЕРОЕ, АМНИСТИЯ САППОРТОВ И БОНУС ЗА СИЛЬНЫЙ ИМПАКТ В ФАЙТАХ
+  // 4. ОТЫГРЫШ НА ГЕРОЕ И ДИНАМИЧЕСКАЯ ПЛАШКА АМНИСТИИ (Пункт 3 — без хардкода про варды!)
   // =========================================================================
-  if (hero_efficiency_percentile < 38 && !hasHighDamageSacrifice) {
+  if (hero_efficiency_percentile < 38 && !hasHighDamageSacrifice && !isHeavySplitPushCarry) {
     const bmPts = Math.round(Math.min(25, Math.max(5, ((40 - hero_efficiency_percentile) / 38) * 24)) * softScale);
     addPenalty('benchmark', 25, bmPts, {
       type: 'ballast',
@@ -3919,67 +4965,123 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     });
   }
 
-  // ИСПРАВЛЕНО v4.2: Бонус за сильный импакт в файтах выдается ТОЛЬКО если hasHighDamageSacrifice === true
-  // (то есть игрок реально вносил высокий урон весь матч, а не просто 1 раз нажал кнопки перед падением трона!)
+  // А) МАКРО-АМНИСТИЯ ЗА СНОС СТРОЕНИЙ И СПЛИТ-ПУШ
+  if (isHeavySplitPushCarry && sabotageScore === 0 && (towerDamage >= 8000 || (towerDamage >= 5500 && tower_share_pct >= 65))) {
+    const macroPushCredit = towerDamage >= 12000 || tower_share_pct >= 75 ? 14 : 10;
+    if (!badges.includes('Боец до последнего')) {
+      badges.push('Главный пушер (Макро)');
+    }
+    macroAmnestyPts += macroPushCredit;
+    supportAmnesty = Math.min(18, supportAmnesty + macroPushCredit);
+    reasons.push({
+      type: 'amnesty',
+      amnestyKind: 'macro',
+      category: '🏰 Макро-амнистия активирована',
+      points: -macroPushCredit,
+      timestamp: 'По ходу матча',
+      title: `🏰 Макро-амнистия активирована (−${macroPushCredit} очк.)`,
+      shortPill: `${towerDamage.toLocaleString('ru-RU')} урона башням (${tower_share_pct}% пуша)`,
+      detail: `Списано ${macroPushCredit} очков вины за огромный вклад в снос строений и сплит-пуш (${towerDamage.toLocaleString('ru-RU')} урона башням — ${tower_share_pct}% от командного).`
+    });
+  }
+
+  // Б) БОЕВАЯ АМНИСТИЯ ЗА ВКЛАД В ДРАКИ (hero_damage / KP)
   if (hasHighDamageSacrifice && tfAudit.highImpactFights.length > 0 && sabotageScore === 0) {
     const sacrificialFights = tfAudit.highImpactFights.filter(f => f.deaths > 0);
     const bestFight = [...tfAudit.highImpactFights].sort((a, b) => b.damage - a.damage)[0];
     const fightImpactCredit = Math.min(12, tfAudit.highImpactFights.length * 5 + (sacrificialFights.length > 0 ? 3 : 0));
 
-    if (sacrificialFights.length > 0 || (dmg_share_pct >= 24 && kills <= 5)) {
+    if (sacrificialFights.length > 0 || (dmg_share_pct >= 24 && kills <= 5) || kills >= 12) {
       badges.push('Боец до последнего');
     }
 
-    supportAmnesty = Math.min(15, supportAmnesty + fightImpactCredit);
+    const prevAmnesty = supportAmnesty;
+    supportAmnesty = Math.min(18, supportAmnesty + fightImpactCredit);
+    const actualCombatCredit = Math.max(1, supportAmnesty - prevAmnesty);
+    combatAmnestyPts += actualCombatCredit;
+
     reasons.push({
       type: 'amnesty',
-      category: 'Импакт в драках',
-      points: -fightImpactCredit,
+      amnestyKind: 'combat',
+      category: '⚔️ Боевая амнистия активирована',
+      points: -actualCombatCredit,
       timestamp: bestFight.time,
-      title: bestFight.deaths > 0 && bestFight.kills === 0
-        ? `Дал ${bestFight.damage.toLocaleString('ru-RU')} урона в замесе перед гибелью`
-        : `Мощный вклад в драках (до ${bestFight.damage.toLocaleString('ru-RU')} урона)`,
-      shortPill: `${bestFight.dmgSharePct}% урона команды в файте`,
-      detail: `На ${bestFight.time} разменял свою жизнь на огромный урон по врагам (${bestFight.kills} киллов, ${bestFight.deaths} смерть).`
+      title: `⚔️ Боевая амнистия активирована (−${actualCombatCredit} очк.)`,
+      shortPill: `Участие: ${teamfight_participation_pct}% • Урон: ${heroDamage.toLocaleString('ru-RU')}`,
+      detail: `Списано ${actualCombatCredit} очков вины за высокий вклад в командные драки (Участие: ${teamfight_participation_pct}%, Урон: ${heroDamage.toLocaleString('ru-RU')}).`
     });
-  } else if (!matchIsParsed && hasHighDamageSacrifice && !roleInfo.isSupport && sabotageScore === 0 && kills <= 5 && deaths >= 7) {
-    const unparsedFightCredit = 10;
-    badges.push('Боец до последнего');
-    supportAmnesty = Math.min(15, supportAmnesty + unparsedFightCredit);
+  } else if (hasHighDamageSacrifice && !roleInfo.isSupport && sabotageScore === 0) {
+    const unparsedFightCredit = kills >= 14 ? 12 : 10;
+    if (!badges.includes('Боец до последнего')) {
+      badges.push('Боец до последнего');
+    }
+    const prevAmnesty = supportAmnesty;
+    supportAmnesty = Math.min(18, supportAmnesty + unparsedFightCredit);
+    const actualCombatCredit = Math.max(1, supportAmnesty - prevAmnesty);
+    combatAmnestyPts += actualCombatCredit;
+
     reasons.push({
       type: 'amnesty',
-      category: 'Импакт в драках',
-      points: -unparsedFightCredit,
+      amnestyKind: 'combat',
+      category: '⚔️ Боевая амнистия активирована',
+      points: -actualCombatCredit,
       timestamp: 'Весь матч',
-      title: `Внес ${dmg_share_pct}% урона команды при ${kills} киллах`,
-      shortPill: `По ${damage_per_death.toLocaleString('ru-RU')} урона за жизнь`,
-      detail: 'Фраги добивали союзники, но основной урон в командных боях давал он.'
+      title: `⚔️ Боевая амнистия активирована (−${actualCombatCredit} очк.)`,
+      shortPill: `Участие: ${teamfight_participation_pct}% • Урон: ${heroDamage.toLocaleString('ru-RU')}`,
+      detail: `Списано ${actualCombatCredit} очков вины за высокий вклад в командные драки (Участие: ${teamfight_participation_pct}%, Урон: ${heroDamage.toLocaleString('ru-RU')}).`
     });
   }
 
-  // Амнистия саппортов за вардинг и участие в драках
-  if (roleInfo.isSupport && sabotageScore === 0 && (wardsPlaced >= 6 || teamfight_participation_pct >= 60)) {
+  // В) САППОРТ-АМНИСТИЯ (ТОЛЬКО для Pos 4–5 за варды, лечение и сейвы!)
+  if (roleInfo.isSupport && sabotageScore === 0 && deaths <= 12 && (wardsPlaced >= 6 || teamfight_participation_pct >= 62)) {
     const campsStacked = player.camps_stacked || 0;
-    const heroHealing = player.hero_healing || 0;
-
-    const wardBonus = wardsPlaced >= 16 ? 8 : wardsPlaced >= 10 ? 6 : wardsPlaced >= 6 ? 4 : 0;
-    const tfBonus = teamfight_participation_pct >= 70 ? 7 : teamfight_participation_pct >= 55 ? 5 : 2;
+    const realWardsCount = wardsIsEstimated ? 0 : wardsPlaced;
+    const wardBonus = realWardsCount >= 16 ? 7 : realWardsCount >= 10 ? 5 : realWardsCount >= 6 ? 3 : 0;
+    const tfBonus = teamfight_participation_pct >= 72 ? 6 : teamfight_participation_pct >= 58 ? 4 : 0;
     const utilityBonus = (campsStacked >= 3 ? 2 : 0) + (heroHealing >= 2500 ? 3 : 0);
 
-    const maxSupportCap = deaths >= 14 ? 6 : 15;
+    const maxSupportCap = deaths >= 11 ? 4 : 12;
     const addedAmnesty = Math.min(Math.max(0, maxSupportCap - supportAmnesty), wardBonus + tfBonus + utilityBonus);
     if (addedAmnesty > 0) {
       supportAmnesty += addedAmnesty;
-      const wardLabel = wardsPlaced > 0 ? (wardsIsEstimated ? `~${wardsPlaced}` : `${wardsPlaced}`) : 'активный сэйв';
+      supportUtilityAmnestyPts += addedAmnesty;
       reasons.push({
         type: 'amnesty',
-        category: 'Саппорт-вклад',
+        amnestyKind: 'support',
+        category: '🛡 Саппорт-амнистия активирована',
         points: -addedAmnesty,
         timestamp: 'За весь матч',
-        title: `Отыграл на команду (${teamfight_participation_pct}% участия в драках)`,
-        shortPill: wardsPlaced > 0 ? `Варды: ${wardLabel}` : `Драки: ${teamfight_participation_pct}%`,
-        detail: `Помогал команде в ${teamfight_participation_pct}% фрагов и выполнял задачи позиции поддержки.`
+        title: `🛡 Саппорт-амнистия активирована (−${addedAmnesty} очк.)`,
+        shortPill: `Вардов: ${wardsPlaced} • Лечение: ${heroHealing.toLocaleString('ru-RU')}`,
+        detail: `Списано ${addedAmnesty} очков вины за полезность на карте, сейв и вижен (Вардов: ${wardsPlaced}, Лечение: ${heroHealing.toLocaleString('ru-RU')}).`
       });
+    }
+  }
+
+  // Формируем единый динамический баннер амнистии (для фронтенда app.js, чтобы никогда не показывать варды у коров Pos 1–3!)
+  let amnestyBanner = null;
+  if (supportAmnesty > 0) {
+    if (macroAmnestyPts > 0 && macroAmnestyPts >= combatAmnestyPts) {
+      amnestyBanner = {
+        kind: 'macro',
+        icon: '🏰',
+        title: '🏰 Макро-амнистия активирована',
+        text: `Списано ${supportAmnesty} очков вины за огромный вклад в снос строений и сплит-пуш (${towerDamage.toLocaleString('ru-RU')} урона башням — ${tower_share_pct}% от командного).`
+      };
+    } else if (!roleInfo.isSupport || combatAmnestyPts > supportUtilityAmnestyPts) {
+      amnestyBanner = {
+        kind: 'combat',
+        icon: '⚔️',
+        title: '⚔️ Боевая амнистия активирована',
+        text: `Списано ${supportAmnesty} очков вины за высокий вклад в командные драки (Участие: ${teamfight_participation_pct}%, Урон: ${heroDamage.toLocaleString('ru-RU')}).`
+      };
+    } else {
+      amnestyBanner = {
+        kind: 'support',
+        icon: '🛡',
+        title: '🛡 Саппорт-амнистия активирована',
+        text: `Списано ${supportAmnesty} очков вины за полезность на карте, сейв и вижен (Вардов: ${wardsPlaced}, Лечение: ${heroHealing.toLocaleString('ru-RU')}).`
+      };
     }
   }
 
@@ -3988,11 +5090,13 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     Math.min(100, economyScore + gameplayScore + benchmarkScore + timelineScore - supportAmnesty)
   );
 
-  const totalRuinScore = exactSumOfFiveCards;
+  const totalRuinScore = (wonMatch && sabotageScore < 55)
+    ? Math.min(24, exactSumOfFiveCards)
+    : exactSumOfFiveCards;
 
   const ruinType = sabotageScore >= 55 && totalRuinScore >= 50
     ? 'Явный руинер (Саботаж)'
-    : totalRuinScore >= 38
+    : (!wonMatch && totalRuinScore >= 38)
       ? 'Главный балласт («Якорь»)'
       : totalRuinScore >= 15
         ? 'Ошибался по игре'
@@ -4047,12 +5151,15 @@ function evaluatePlayer(player, playerIndex, matchContext) {
     dmg_share_pct,
     damage_per_death,
     tower_damage: towerDamage,
+    tower_share_pct,
     hero_efficiency_percentile,
     wards_placed: wardsPlaced,
     wards_is_estimated: wardsIsEstimated,
     damage_per_gold,
     high_impact_fights_count: verifiedHighImpactCount,
     instant_bkb_deaths_count: tfAudit.instantBurstWithoutBkbFights.length,
+    locked_down_deaths_count: tfAudit.lockedDownBeforeButtonsFights.length,
+    amnesty_banner: amnestyBanner,
     badges,
     items: mainItems,
     inventory: invAudit.richItems,
@@ -4079,10 +5186,12 @@ function evaluatePlayer(player, playerIndex, matchContext) {
       total_gold: totalGold,
       unspentGold: maxHoardedGold,
       hero_damage: heroDamage,
+      hero_healing: heroHealing,
       teamfight_damage: tfAudit.totalFightDamage || heroDamage,
       dmg_share_pct,
       damage_per_death,
       tower_damage: towerDamage,
+      tower_share_pct,
       networth_preservation_pct,
       jungle_farm_pct,
       jungleFarmPct: jungle_farm_pct,
@@ -4099,6 +5208,8 @@ function evaluatePlayer(player, playerIndex, matchContext) {
       gameplay: gameplayScore,
       benchmark: benchmarkScore,
       amnesty: supportAmnesty > 0 ? -supportAmnesty : 0,
+      amnesty_title: amnestyBanner ? amnestyBanner.title : null,
+      amnesty_text: amnestyBanner ? amnestyBanner.text : null,
       timeline: timelineScore,
       sabotage: Math.min(100, sabotageScore),
       ballast: totalRuinScore,
@@ -4118,13 +5229,36 @@ function evaluatePlayer(player, playerIndex, matchContext) {
 }
 
 /**
- * Генератор «Хронологии матча: как развивалась и где сломалась игра» (v4.3)
- * Восстанавливает по минутам историю катки:
- * 1) Старт и лайнинг (кто выиграл линии, кто нафидил по 3 раза за 5 минут).
- * 2) Файты ни за что (когда 3+ человека пошли без позиции и отдались всухую 0 в 3 / 1 в 4).
- * 3) Драки с важными кнопками в КД (когда у керри/инициатора ульт или BKB был в кулдауне после прошлого боя, а команда всё равно полезла драться).
- * 4) Главный переломный файт (игра шла хорошо, но после одного замеса, где кор зажал кнопки или дрался без BKB, всё пошло под откос).
- * 5) Запоздалые ключевые тайминги (например, покупка BKB на 40-й минуте, когда мидгейм уже слит).
+ * Honorable Mention: Запрос парсинга реплея матча в OpenDota API (POST /api/request/{match_id})
+ */
+async function requestOpenDotaMatchParse(matchId, options = {}) {
+  const cleanId = String(matchId || "").replace(/\D/g, "");
+  if (!cleanId) return { ok: false, error: "Некорректный ID матча" };
+  const baseUrl = options.openDotaBaseUrl || "https://api.opendota.com/api";
+  const timeoutMs = options.timeoutMs || 5000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(`${baseUrl}/request/${cleanId}`, {
+      method: "POST",
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!resp.ok) return { ok: false, status: resp.status };
+    const data = await resp.json();
+    return {
+      ok: true,
+      jobId: data && data.job ? data.job.jobId : null,
+      raw: data
+    };
+  } catch (err) {
+    clearTimeout(timer);
+    return { ok: false, error: err && err.message ? err.message : "Network error" };
+  }
+}
+
+/**
+ * Генератор «Хронологии матча: как развивалась и где сломалась игра»
  */
 function buildMatchChronology(matchData, evaluatedPlayers) {
   const durationSec = matchData.duration || 2400;
@@ -4136,14 +5270,12 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
   const teamfights = Array.isArray(matchData.teamfights) ? matchData.teamfights : [];
   const goldAdv = Array.isArray(matchData.radiant_gold_adv) ? matchData.radiant_gold_adv : [];
 
-  // Положительное значение = преимущество проигравшей команды (чтобы легко видеть, когда у них всё шло хорошо!)
   const getLosingTeamGoldLeadAtMin = (minIdx) => {
     if (goldAdv.length > 0) {
       const idx = Math.min(Math.max(0, minIdx), goldAdv.length - 1);
       const radAdv = goldAdv[idx] || 0;
       return losingIsRadiant ? radAdv : -radAdv;
     }
-    // Фолбэк через сумму gold_t игроков
     const hasGoldT = matchData.players.some(p => Array.isArray(p.gold_t) && p.gold_t.length > minIdx);
     if (!hasGoldT) return null;
     let radG = 0;
@@ -4158,7 +5290,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
 
   const events = [];
 
-  // 1. ФАЗА ЛАЙНИНГА (00:00 – 12:00)
   const leadAt10 = getLosingTeamGoldLeadAtMin(10);
   const laningTilters = evaluatedPlayers.filter(p =>
     p.reasons.some(r => r.category === 'Лайнинг')
@@ -4211,10 +5342,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
     pill: laningPill
   });
 
-  // 2. АНАЛИЗ ДРАК (teamfights): ищем:
-  //    - «Переломный файт» (игра шла хорошо, но тут не доиграли и всё пошло под откос)
-  //    - «Драка с важными кнопками в КД» (пошли драться без ультов / без керри)
-  //    - «Файт ни за что» (3+ дурачка пошли и просто так отдались 0 в 3 / 0 в 4)
   if (teamfights.length > 0) {
     const lastUltEndByIdx = {};
     const lastBkbEndByIdx = {};
@@ -4285,7 +5412,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
           lastUltEndByIdx[idx] = tfEnd;
         }
 
-        // Проверяем BKB
         const bkbBoughtSec = evalP.build_audit ? evalP.build_audit.bkbBoughtAtSec : null;
         const hadBkbAtFight = evalP.items.includes(116) && (bkbBoughtSec !== null ? bkbBoughtSec <= tfStart - 10 : tfStart >= 1500);
         const pressedBkb = (itUses.black_king_bar || 0) > 0;
@@ -4299,7 +5425,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
           lastBkbEndByIdx[idx] = tfEnd;
         }
 
-        // Если кор с критически поздним BKB дрался и умер в мидгейме (20:00+), когда еще НЕ купил BKB
         if (!evalP.isSupport && d > 0 && tfStart >= 1140 && !hadBkbAtFight && evalP.build_audit && evalP.build_audit.hasCriticalBuildMistake) {
           coresWithoutBkbInFight.push(
             evalP.build_audit.bkbBoughtAtMin
@@ -4308,7 +5433,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
           );
         }
 
-        // Зажатые готовые кнопки в проигранном файте
         if ((d > 0 || losingDeaths >= 3) && tfStart >= 720) {
           const missedHere = [];
           if (ultWasReady && !usedUlt && ultLabel && (d > 0 || dmg < 1400)) {
@@ -4322,7 +5446,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
           }
         }
 
-        // Проверка отсутствия Pos 1 / Pos 2 в крупном замесе
         if ((evalP.position === 1 || evalP.position === 2) && d === 0 && dmg < 250 && tfStart >= 900) {
           absentCores.push(`${evalP.hero_name} (Pos ${evalP.position})`);
         }
@@ -4354,7 +5477,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
       });
     }
 
-    // А) Находим ГЛАВНЫЙ ПЕРЕЛОМНЫЙ ФАЙТ (когда игра шла нормально/ровно/в плюс, либо самый тяжелый слив в мид/лейт-гейме 15:00–42:00)
     const midLateFights = analyzedFights.filter(f => f.tfStart >= 900 && f.losingDeaths >= 2);
     let turningFight = null;
     let bestTurningScore = -999999;
@@ -4402,7 +5524,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
       });
     }
 
-    // Б) Находим «ДРАКУ С КНОПКАМИ В КД / БЕЗ КЕРРИ» (когда ульты или BKB были в кулдауне, а команда всё равно полезла драться)
     const cdFight = analyzedFights.find(f =>
       !usedFightIndices.has(f.fIdx) &&
       f.losingDeaths >= 3 &&
@@ -4417,7 +5538,7 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
       events.push({
         sortTimeSec: cdFight.tfStart,
         time: cdFight.timeStr,
-        tag: '⏳ ДРАКА БЕЗ КНОПОК (КД)',
+        tag: '⏳ ДРАКА БЕЗ КНОПКИ (КД)',
         tone: 'warn',
         title: `Приняли файт без главных кнопок на ${cdFight.timeStr} (размен ${cdFight.winningDeaths} в ${cdFight.losingDeaths})`,
         description: `Команда ${losingTeamName} ввязалась в замес, когда ${whyBadFight}. Итог — потеря ${cdFight.losingDeaths} героев.`,
@@ -4425,7 +5546,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
       });
     }
 
-    // В) Находим «ФАЙТ НИ ЗА ЧТО» (3+ человека пошли и просто так умерли всухую 0 в 3 / 0 в 4 / 1 в 4)
     const pointlessFight = analyzedFights.find(f =>
       !usedFightIndices.has(f.fIdx) &&
       f.tfStart >= 720 &&
@@ -4447,7 +5567,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
       });
     }
   } else {
-    // ФОЛБЭК ХРОНОЛОГИИ ДЛЯ НЕРАСПАРСЕННЫХ МАТЧЕЙ OPENDOTA (когда массив teamfights пуст)
     const losingPlayers = evaluatedPlayers.filter(p => p.isRadiant === losingIsRadiant);
     const winningPlayers = evaluatedPlayers.filter(p => p.isRadiant !== losingIsRadiant);
 
@@ -4495,7 +5614,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
     }
   }
 
-  // 3. СОБЫТИЕ МИНИ-ИИ ОЦЕНЩИКА БИЛДА (поздний BKB, игнор Nullifier против 3 Eul's, игнор MKB против Butterfly и др.)
   for (const p of evaluatedPlayers) {
     if (!p.wonMatch && p.build_audit && p.build_audit.hasCriticalBuildMistake) {
       if (p.build_audit.bkbBoughtAtSec >= 1980) {
@@ -4531,7 +5649,6 @@ function buildMatchChronology(matchData, evaluatedPlayers) {
     }
   }
 
-  // 4. РАЗВЯЗКА МАТЧА (Финал)
   const noBuybackLosers = evaluatedPlayers.filter(p => p.badges.includes('Жертва без байбека'));
   const finalTimeStr = formatClock(durationSec);
   if (noBuybackLosers.length > 0) {
@@ -4602,12 +5719,23 @@ function analyzeMatch(matchData) {
   });
 
   const rankedByRuin = [...evaluatedPlayers].sort((a, b) => {
+    const aSab = a.scores.sabotage >= 55 && a.scores.total >= 50 ? 1 : 0;
+    const bSab = b.scores.sabotage >= 55 && b.scores.total >= 50 ? 1 : 0;
+    if (bSab !== aSab) return bSab - aSab;
+    const aLoserWithFault = !a.wonMatch && a.scores.total >= 12 ? 1 : 0;
+    const bLoserWithFault = !b.wonMatch && b.scores.total >= 12 ? 1 : 0;
+    if (bLoserWithFault !== aLoserWithFault) return bLoserWithFault - aLoserWithFault;
     if (b.scores.total !== a.scores.total) return b.scores.total - a.scores.total;
     return a.hero_efficiency_percentile - b.hero_efficiency_percentile;
   });
 
-  const topCulprit = rankedByRuin[0];
-  const closeRuiner = rankedByRuin[1] || null;
+  const explicitSaboteurs = rankedByRuin.filter(p => p.scores.sabotage >= 55 && p.scores.total >= 50);
+  const losingTeamCandidates = rankedByRuin.filter(p => !p.wonMatch);
+
+  const topCulprit = explicitSaboteurs[0] || losingTeamCandidates[0] || rankedByRuin[0];
+  const remainingCandidates = (explicitSaboteurs.length > 0 ? rankedByRuin : losingTeamCandidates)
+    .filter(p => p.player_slot !== topCulprit.player_slot);
+  const closeRuiner = remainingCandidates[0] || rankedByRuin.find(p => p.player_slot !== topCulprit.player_slot) || null;
   const scoreGap = closeRuiner ? Math.max(0, topCulprit.scores.total - closeRuiner.scores.total) : topCulprit.scores.total;
 
   if (topCulprit && topCulprit.scores.total >= 25 && topCulprit.scores.sabotage < 55) {
@@ -4618,7 +5746,6 @@ function analyzeMatch(matchData) {
   const isExplicit = topCulprit.scores.sabotage >= 55 && topCulprit.scores.total >= 50;
   const hasRealRuiner = topCulprit.scores.total >= 25;
 
-  // Формируем поминутный массив преимущества Radiant по золоту для интерактивного SVG-графика на фронтенде
   let goldAdvSeries = Array.isArray(matchData.radiant_gold_adv) && matchData.radiant_gold_adv.length > 1
     ? matchData.radiant_gold_adv
     : [];
@@ -4637,9 +5764,23 @@ function analyzeMatch(matchData) {
     }
   }
 
+  // Honorable Mention: информация о статусе парсинга реплея в OpenDota
+  const parseStatusInfo = {
+    is_parsed: matchIsParsed,
+    can_request_parse: !matchIsParsed && Boolean(matchData.match_id),
+    request_endpoint: matchData.match_id ? `https://api.opendota.com/api/request/${matchData.match_id}` : null,
+    warning_title: matchIsParsed
+      ? '✓ Полный разбор реплея (OpenDota Parsed)'
+      : '⚠ Матч не распарсен в OpenDota (доступна только базовая стата)',
+    warning_text: matchIsParsed
+      ? 'Доступны поминутные логи покупок, точные координаты вардов и нажатия всех кнопок в тимфайтах.'
+      : 'В нераспарсенных матчах отсутствуют логи тимфайтов (combat_log), точное время нажатия кнопок/BKB и лог установки вардов, поэтому сложнее со 100% точностью определить виновника в микро-моментах. Нажмите «Запросить парсинг реплея», чтобы OpenDota обработал запись матча.'
+  };
+
   return {
     match_id: matchData.match_id,
     is_parsed: matchIsParsed,
+    parse_status: parseStatusInfo,
     duration_sec: durationSec,
     radiant_gold_adv: goldAdvSeries,
     duration_formatted: formatClock(durationSec),
@@ -4880,12 +6021,6 @@ const DEMO_MATCHES = {
   }
 };
 
-/**
- * Асинхронный полный пайплайн анализа матча:
- * 1) Подгружает актуальных героев, способности, предметы и популярные сборки (/api/heroes/{hero_id}/itemPopularity) через syncDotaConstantsAndMeta().
- * 2) Выполняет полный анализ матча analyzeMatch().
- * 3) При наличии API-ключа модели (options.apiKey / GEMINI_API_KEY / OPENAI_API_KEY / LLM_API_KEY) запрашивает финальный LLM-вердикт по сборке через requestLlmBuildVerdict().
- */
 async function analyzeMatchWithLlm(matchData, options = {}) {
   if (matchData && matchData.match_id && (!isMatchReplayParsed(matchData.players, matchData.teamfights) || options.enrichWithStratz !== false)) {
     try {
@@ -4941,11 +6076,14 @@ module.exports = {
   fetchStratzGraphQL,
   fetchStratzMatchAndEnrich,
   syncDotaConstantsAndMeta,
+  requestOpenDotaMatchParse,
   buildLlmAuditPayload,
   requestLlmBuildVerdict,
   inferTeamRoles,
   detectRole,
   auditInventory,
+  detectPlayerBuildArchetype,
+  analyzeEnemyTargetThreats,
   evaluateBuildAndTimings,
   buildMatchChronology,
   analyzeTeamfightImpact,
