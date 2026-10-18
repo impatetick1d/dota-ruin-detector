@@ -82,7 +82,7 @@ let activeReasonFilter = 'all';
 let activeTableFilter = 'all';
 let chartGeometryCache = null;
 
-// Инъекция Next-Gen стилей: легкий 3D-Tilt без конфликта с CSS transition + мягкий полноразмерный арт героя
+// Инъекция Next-Gen стилей: легкий и четкий 3D-Tilt без мыла + полноразмерный арт героя без обреза
 function injectNextGenStyles() {
   if (document.getElementById('d2-nextgen-styles')) return;
   const style = document.createElement('style');
@@ -102,16 +102,14 @@ function injectNextGenStyles() {
       font-variant-numeric: tabular-nums;
     }
 
-    /* Возвращаем плавный 3D-Tilt: убираем ТОЛЬКО transition на transform, чтобы CSS не спорил с GSAP! */
+    /* Мягкий и легкий 3D-Tilt без замыливания текста внутри */
     .tilt-surface {
       position: relative;
       transform-style: flat !important;
       backface-visibility: hidden;
       will-change: transform;
-      transition: border-color 0.25s ease, box-shadow 0.25s ease, background-color 0.25s ease !important;
     }
 
-    /* Убираем задержку на магнитных кнопках (transition только для цвета и тени, а не для координат x/y) */
     button,
     [data-magnetic],
     #analyzeBtn,
@@ -208,26 +206,25 @@ function injectNextGenStyles() {
       position: absolute !important;
       right: 0 !important;
       top: 0 !important;
-      width: 82% !important;
-      height: 360px !important;
+      width: 85% !important;
+      height: 380px !important;
       opacity: 1 !important;
       pointer-events: none !important;
       z-index: 0 !important;
       overflow: hidden !important;
-      /* Двойная маска: плавное растворение вниз до самого конца 360px + плавный уход влево */
-      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.25) 72%, transparent 100%);
-      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.25) 72%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.88) 38%, rgba(0,0,0,0.2) 75%, transparent 100%);
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.88) 38%, rgba(0,0,0,0.2) 75%, transparent 100%);
     }
 
     .dossier-hero-backdrop img {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
-      object-position: 75% 18% !important;
-      opacity: 0.34 !important;
-      filter: blur(3px) saturate(1.28) contrast(1.04) !important;
-      -webkit-mask-image: radial-gradient(ellipse 95% 95% at 78% 24%, rgba(0,0,0,1) 12%, rgba(0,0,0,0.55) 50%, transparent 82%) !important;
-      mask-image: radial-gradient(ellipse 95% 95% at 78% 24%, rgba(0,0,0,1) 12%, rgba(0,0,0,0.55) 50%, transparent 82%) !important;
+      object-position: 74% 16% !important;
+      opacity: 0.32 !important;
+      filter: blur(3px) saturate(1.28) contrast(1.05) !important;
+      -webkit-mask-image: radial-gradient(ellipse 92% 92% at 76% 22%, rgba(0,0,0,1) 15%, rgba(0,0,0,0.5) 55%, transparent 85%) !important;
+      mask-image: radial-gradient(ellipse 92% 92% at 76% 22%, rgba(0,0,0,1) 15%, rgba(0,0,0,0.5) 55%, transparent 85%) !important;
       transform-origin: top right;
     }
 
@@ -247,7 +244,7 @@ function injectNextGenStyles() {
     }
 
     .nextgen-gauge-ring {
-      transition: stroke-dashoffset 0.75s var(--ease-out-expo);
+      transition: stroke-dashoffset 1.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .kbd-hint {
@@ -287,18 +284,16 @@ function sanitizeDemoPromptInDom() {
   });
 }
 
-// Легкий и сверхплавный 3D-Tilt (max ~1.6°–2.0° без замыливания шрифтов и без задержки мыши)
+// Легкий и сверхплавный 3D-Tilt (max ~1.5°–2.0° без замыливания шрифтов и без задержки мыши)
 function bindSmoothLightTilt() {
   const isFinePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   if (!isFinePointer || typeof gsap === 'undefined') return;
 
-  // Переопределяем глобальный хук из index.html, чтобы он использовал более мягкий угол наклона и quickTo
   window.refreshAwwwardsInteractions = function () {
     document.querySelectorAll('[data-tilt]:not([data-smooth-tilt-bound])').forEach((card) => {
       card.setAttribute('data-smooth-tilt-bound', '1');
-      card.setAttribute('data-tilt-bound', '1'); // блокируем старый тяжелый обработчик из index.html
+      card.setAttribute('data-tilt-bound', '1');
 
-      // Делаем наклон в 2 раза легче и деликатнее (максимум 1.5° - 2.0°)
       const rawTilt = parseFloat(card.getAttribute('data-tilt')) || 2.5;
       const maxDeg = Math.min(2.0, rawTilt * 0.55);
 
@@ -396,19 +391,20 @@ function initNextGenInteractions() {
   });
 }
 
-// Плавная анимация счетчиков цифр
-function animateNumbers(containerSelector) {
+// Медленная и красивая синхронная анимация счетчика цифр и заполнения кольца SVG (1.35 секунды)
+function animateNumbers(containerSelector, durationMs = 1350) {
   const root = containerSelector ? document.querySelector(containerSelector) : document;
   if (!root) return;
+
   const counters = root.querySelectorAll('[data-count-to]');
   counters.forEach((el) => {
     const target = Number(el.getAttribute('data-count-to')) || 0;
-    const duration = 450;
+    el.textContent = '0';
     const startTime = performance.now();
 
     function tick(now) {
-      const progress = Math.min(1, (now - startTime) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const progress = Math.min(1, (now - startTime) / durationMs);
+      const eased = 1 - Math.pow(1 - progress, 4);
       el.textContent = Math.round(target * eased);
       if (progress < 1) {
         requestAnimationFrame(tick);
@@ -417,6 +413,21 @@ function animateNumbers(containerSelector) {
       }
     }
     requestAnimationFrame(tick);
+  });
+
+  const rings = root.querySelectorAll('[data-ring-circumference][data-ring-offset]');
+  rings.forEach((ring) => {
+    const circumference = parseFloat(ring.getAttribute('data-ring-circumference')) || 0;
+    const targetOffset = parseFloat(ring.getAttribute('data-ring-offset')) || 0;
+
+    ring.style.transition = 'none';
+    ring.style.strokeDashoffset = `${circumference}`;
+
+    void ring.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      ring.style.transition = `stroke-dashoffset ${durationMs}ms cubic-bezier(0.16, 1, 0.3, 1)`;
+      ring.style.strokeDashoffset = `${targetOffset}`;
+    });
   });
 }
 
@@ -508,13 +519,7 @@ async function handleRequestOpenDotaParse(matchId) {
   }
 }
 
-function triggerHooksRefresh() {
-  if (typeof window.refreshAwwwardsInteractions === 'function') {
-    window.refreshAwwwardsInteractions();
-  }
-}
-
-// Круговой SVG-индикатор Индекса Руина
+// Круговой SVG-индикатор Индекса Руина (с анимацией заполнения кольца с 0)
 function renderRadialGauge(score, ruinType = '', compact = false) {
   const clamped = Math.max(0, Math.min(100, Number(score) || 0));
   const strokeColor = clamped >= 55 ? '#f43f5e' : clamped >= 25 ? '#f59e0b' : '#10b981';
@@ -527,7 +532,7 @@ function renderRadialGauge(score, ruinType = '', compact = false) {
     const c = 2 * Math.PI * r;
     const offset = c - (clamped / 100) * c;
     return `
-      <div class="flex items-center gap-3 bg-[#080b11]/90 px-3.5 py-2 rounded-xl border border-white/[0.1] shadow-md backdrop-blur-md">
+      <div class="flex items-center gap-3 bg-[#080b11]/90 px-3.5 py-2 rounded-xl border border-white/[0.1] shadow-md">
         <div class="relative w-[64px] h-[64px] flex items-center justify-center shrink-0">
           <svg viewBox="0 0 ${size} ${size}" class="w-full h-full -rotate-90">
             <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="6" />
@@ -540,12 +545,14 @@ function renderRadialGauge(score, ruinType = '', compact = false) {
               stroke-width="6"
               stroke-linecap="round"
               stroke-dasharray="${c.toFixed(1)}"
-              stroke-dashoffset="${offset.toFixed(1)}"
+              stroke-dashoffset="${c.toFixed(1)}"
+              data-ring-circumference="${c.toFixed(1)}"
+              data-ring-offset="${offset.toFixed(1)}"
               class="nextgen-gauge-ring ${glowClass}"
             />
           </svg>
           <div class="absolute inset-0 flex flex-col items-center justify-center leading-none">
-            <span data-count-to="${clamped}" class="font-mono text-base font-extrabold ${textColor}">${clamped}</span>
+            <span data-count-to="${clamped}" class="font-mono text-base font-extrabold ${textColor}">0</span>
             <span class="font-mono text-[9px] text-slate-400">/100</span>
           </div>
         </div>
@@ -563,7 +570,7 @@ function renderRadialGauge(score, ruinType = '', compact = false) {
   const offset = c - (clamped / 100) * c;
 
   return `
-    <div class="flex flex-col items-center justify-center bg-[#080b11]/85 px-6 py-4 rounded-2xl border border-white/[0.12] shadow-xl shrink-0 self-start lg:self-center backdrop-blur-md">
+    <div class="flex flex-col items-center justify-center bg-[#080b11]/85 px-6 py-4 rounded-2xl border border-white/[0.12] shadow-xl shrink-0 self-start lg:self-center">
       <div class="text-[10px] font-display uppercase tracking-widest text-slate-300 font-bold mb-1.5">Индекс Руина</div>
       <div class="relative w-[132px] h-[132px] flex items-center justify-center">
         <svg viewBox="0 0 ${size} ${size}" class="w-full h-full -rotate-90">
@@ -577,12 +584,14 @@ function renderRadialGauge(score, ruinType = '', compact = false) {
             stroke-width="10"
             stroke-linecap="round"
             stroke-dasharray="${c.toFixed(1)}"
-            stroke-dashoffset="${offset.toFixed(1)}"
+            stroke-dashoffset="${c.toFixed(1)}"
+            data-ring-circumference="${c.toFixed(1)}"
+            data-ring-offset="${offset.toFixed(1)}"
             class="nextgen-gauge-ring ${glowClass}"
           />
         </svg>
         <div class="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <div data-count-to="${clamped}" class="font-mono text-3xl sm:text-4xl font-extrabold ${textColor} tracking-tight">${clamped}</div>
+          <div data-count-to="${clamped}" class="font-mono text-3xl sm:text-4xl font-extrabold ${textColor} tracking-tight">0</div>
           <div class="font-mono text-[11px] text-slate-400 font-semibold mt-1">/ 100</div>
         </div>
       </div>
@@ -1770,7 +1779,6 @@ function renderInspector(data, animateTransition = false) {
   const heroImgUrl = getHeroImageUrl(p.hero_id, p.hero_name);
   const bgImg = document.getElementById('inspectorBgHeroImg');
   if (bgImg) {
-    // Убираем жесткий обрез height: 150px из index.html и ставим полноразмерный плавный фейд
     if (bgImg.parentElement) {
       bgImg.parentElement.removeAttribute('style');
       bgImg.parentElement.className = 'dossier-hero-backdrop';
@@ -1966,7 +1974,7 @@ function renderInspector(data, animateTransition = false) {
     }).join('');
   }
 
-const supCard = document.getElementById('inspectorSupportCard');
+  const supCard = document.getElementById('inspectorSupportCard');
   if (supCard) {
     if (p.scores.amnesty < 0) {
       const ab = p.amnesty_banner || {
@@ -2011,10 +2019,9 @@ const supCard = document.getElementById('inspectorSupportCard');
     `;
   }
 
-renderInspectorReasonsList(data);
+  renderInspectorReasonsList(data);
   animateProgressBars('#tabPanel-dossier');
 
-  // Плавный кинематографичный переход при переключении между героями
   if (animateTransition && typeof gsap !== 'undefined') {
     if (bgImg) {
       gsap.fromTo(
